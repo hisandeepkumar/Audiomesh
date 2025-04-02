@@ -452,26 +452,43 @@
     function pausePlayback() {
         if (!syncStartTime || !isPlaying) return;
         
+        // Pause on host
         audioElement.pause();
         isPlaying = false;
         const elapsed = (Date.now() + serverTimeOffset - syncStartTime) / 1000;
+        console.log('Host paused at:', new Date(Date.now() + serverTimeOffset).toISOString(), 'Elapsed:', elapsed);
+
+        // Send pause signal to clients
         const syncData = {
             type: 'pause',
             startTime: syncStartTime,
             currentTime: elapsed
         };
-        connections.forEach(conn => conn.send(syncData));
+        connections.forEach(conn => {
+            conn.send(syncData);
+            console.log('Pause signal sent to:', conn.peer);
+        });
     }
 
     function stopPlayback() {
+        if (!syncStartTime) return;
+        
+        // Stop on host
         audioElement.pause();
         audioElement.currentTime = 0;
         isPlaying = false;
         syncStartTime = 0;
-        connections.forEach(conn => conn.send({ 
-            type: 'stop', 
-            timestamp: Date.now() + serverTimeOffset 
-        }));
+        console.log('Host stopped at:', new Date(Date.now() + serverTimeOffset).toISOString());
+
+        // Send stop signal to clients
+        const syncData = {
+            type: 'stop',
+            timestamp: Date.now() + serverTimeOffset
+        };
+        connections.forEach(conn => {
+            conn.send(syncData);
+            console.log('Stop signal sent to:', conn.peer);
+        });
     }
 
     // Data Handler
@@ -559,18 +576,24 @@
 
     function handlePause(data) {
         const clientAudio = document.getElementById('clientAudio');
+        if (!clientAudio.src || !isPlaying) return;
+
         clientAudio.pause();
         clientAudio.currentTime = data.currentTime;
         isPlaying = false;
+        console.log('Client paused at:', new Date(Date.now() + serverTimeOffset).toISOString(), 'Current time set to:', data.currentTime);
         updateSyncStatus('⏸ Paused');
     }
 
     function handleStop() {
         const clientAudio = document.getElementById('clientAudio');
+        if (!clientAudio.src) return;
+
         clientAudio.pause();
         clientAudio.currentTime = 0;
         isPlaying = false;
         syncStartTime = 0;
+        console.log('Client stopped at:', new Date(Date.now() + serverTimeOffset).toISOString());
         updateSyncStatus('⏹ Stopped');
     }
 
