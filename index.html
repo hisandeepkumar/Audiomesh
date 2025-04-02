@@ -63,6 +63,9 @@
             margin: 10px 0;
             display: flex;
             justify-content: center;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
         }
 
         .scan-btn {
@@ -219,7 +222,7 @@
     <script>
     const CHUNK_SIZE = 64 * 1024;
     const MAX_PARALLEL_CHUNKS = 5;
-    const SYNC_INTERVAL = 1000; // Reduced to 1s for better sync
+    const SYNC_INTERVAL = 1000;
     
     let receivedFiles = new Map();
     let connections = new Map();
@@ -228,10 +231,9 @@
 
     // Initialize PeerJS
     function initializePeer() {
+        // Using default PeerJS server for simplicity
         peer = new Peer({
-            host: 'peerjs-server.herokuapp.com',
-            secure: true,
-            port: 443
+            debug: 2 // Enable debug logging to troubleshoot
         });
 
         peer.on('open', (id) => {
@@ -239,8 +241,12 @@
             new QRCode(document.getElementById('senderQr'), {
                 text: id,
                 width: 150,
-                height: 150
+                height: 150,
+                colorDark: "#00FF00",  // Green QR code
+                colorLight: "#FFFFFF", // White background
+                correctLevel: QRCode.CorrectLevel.H // High error correction
             });
+            console.log('Peer ID generated:', id);
         });
 
         peer.on('connection', (conn) => {
@@ -251,7 +257,7 @@
 
         peer.on('error', (err) => {
             console.error('PeerJS Error:', err);
-            updateSyncStatus('🔴 Connection Error');
+            updateSyncStatus('🔴 Connection Error: ' + err.type);
         });
     }
 
@@ -309,8 +315,10 @@
 
                     if (code) {
                         connectToPeer(code.data);
+                        // Clean up camera
                         stream.getTracks().forEach(track => track.stop());
                         qrScanner.style.display = 'none';
+                        qrScanner.innerHTML = '';
                     } else {
                         requestAnimationFrame(scan);
                     }
@@ -320,6 +328,7 @@
             .catch(err => {
                 console.error('Camera error:', err);
                 updateSyncStatus('🔴 Camera Access Denied');
+                qrScanner.style.display = 'none';
             });
     }
 
@@ -330,6 +339,10 @@
         const conn = peer.connect(peerId, { reliable: true });
         setupConnection(conn);
         updateSyncStatus('🟡 Connecting...');
+        conn.on('open', () => {
+            updateSyncStatus('🟢 Connected');
+            console.log('Successfully connected to:', peerId);
+        });
     }
 
     // Audio Handling
@@ -511,7 +524,10 @@
     }
 
     // Initialize
-    window.addEventListener('load', initializePeer);
+    window.addEventListener('load', () => {
+        console.log('Initializing PeerJS...');
+        initializePeer();
+    });
     </script>
 </body>
 </html>
