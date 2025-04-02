@@ -222,19 +222,36 @@
     <script>
     const CHUNK_SIZE = 64 * 1024;
     const MAX_PARALLEL_CHUNKS = 5;
-    const SYNC_INTERVAL = 1000;
+    const SYNC_INTERVAL = 100; // 100ms for continuous sync
+    const START_DELAY = 2000; // 2 seconds delay for initial sync
     
     let receivedFiles = new Map();
     let connections = new Map();
     let peer = null;
     let isHost = false;
+    let syncStartTime = 0; // Universal start time in milliseconds
+    let serverTimeOffset = 0; // Offset from local time to server time
+
+    // Fetch server time from an external source
+    async function getServerTime() {
+        try {
+            const response = await fetch('https://worldtimeapi.org/api/timezone/UTC');
+            const data = await response.json();
+            return data.unixtime * 1000; // Convert to milliseconds
+        } catch (err) {
+            console.error('Failed to fetch server time:', err);
+            return Date.now(); // Fallback to local time if server fetch fails
+        }
+    }
 
     // Initialize PeerJS
-    function initializePeer() {
-        // Using default PeerJS server for simplicity
-        peer = new Peer({
-            debug: 2 // Enable debug logging to troubleshoot
-        });
+    async function initializePeer() {
+        peer = new Peer({ debug: 2 });
+
+        // Get server time offset on initialization
+        const serverTime = await getServerTime();
+        serverTimeOffset = serverTime - Date.now();
+        console.log('Server time offset:', serverTimeOffset);
 
         peer.on('open', (id) => {
             document.getElementById('myId').textContent = id;
@@ -242,9 +259,9 @@
                 text: id,
                 width: 150,
                 height: 150,
-                colorDark: "#00FF00",  // Green QR code
-                colorLight: "#FFFFFF", // White background
-                correctLevel: QRCode.CorrectLevel.H // High error correction
+                colorDark: "#00FF00",
+                colorLight: "#FFFFFF",
+                correctLevel: QRCode.CorrectLevel.H
             });
             console.log('Peer ID generated:', id);
         });
@@ -288,7 +305,7 @@
     function startQRScanner() {
         const qrScanner = document.getElementById('qrScanner');
         const video = document.createElement('video');
-        const canvas = document.createElement('canvas');
+        const canvas =Element('canvas');
         const ctx = canvas.getContext('2d');
 
         qrScanner.innerHTML = '';
@@ -315,7 +332,6 @@
 
                     if (code) {
                         connectToPeer(code.data);
-                        // Clean up camera
                         stream.getTracks().forEach(track => track.stop());
                         qrScanner.style.display = 'none';
                         qrScanner.innerHTML = '';
@@ -403,37 +419,55 @@
     // Audio Sync
     let syncInterval = null;
     function syncPlayback() {
-        if (!connections.size) return;
+        if (!connections.size || !audioElement.src) {
+            alert('No listeners connected or no audio selected!');
+            return;
+        }
         
-        audioElement.play();
+        // Set universal start time based on server time
+        syncStartTime = Date.now() + serverTimeOffset + START_DELAY;
+        
+        // Schedule host playback
+        setTimeout(() => {
+            audioElement.currentTime = 0;
+            audioElement.play();
+        }, START_DELAY);
+
+        // Send sync data to clients
         clearInterval(syncInterval);
         syncInterval = setInterval(() => {
             const syncData = {
                 type: 'sync',
-                timestamp: Date.now(),
-                currentTime: audioElement.currentTime,
-                playbackRate: audioElement.playbackRate
+                startTime: syncStartTime,
+                playbackRate: audioElement.playbackRate,
+                playing: !audioElement.paused
             };
             connections.forEach(conn => conn.send(syncData));
         }, SYNC_INTERVAL);
     }
 
     function pausePlayback() {
+        if (!syncStartTime) return;
+        
         audioElement.pause();
         clearInterval(syncInterval);
-        connections.forEach(conn => conn.send({ 
-            type: 'pause', 
-            timestamp: Date.now() 
-        }));
+        const elapsed = (Date.now() + serverTimeOffset - syncStartTime) / 1000;
+        const syncData = {
+            type: 'pause',
+            startTime: syncStartTime,
+            currentTime: elapsed
+        };
+        connections.forEach(conn => conn.send(syncData));
     }
 
     function stopPlayback() {
         audioElement.pause();
         audioElement.currentTime = 0;
         clearInterval(syncInterval);
+        syncStartTime = 0;
         connections.forEach(conn => conn.send({ 
             type: 'stop', 
-            timestamp: Date.now() 
+            timestamp: Date.now() + serverTimeOffset 
         }));
     }
 
@@ -450,7 +484,7 @@
                 handleSync(data);
                 break;
             case 'pause':
-                handlePause();
+                handlePause(data);
                 break;
             case 'stop':
                 handleStop();
@@ -477,27 +511,48 @@
 
         if(file.received >= file.size) {
             const audioBlob = new Blob(file.chunks, { type: file.mime });
-            document.getElementById('clientAudio').src = URL.createObjectURL(audioBlob);
-            updateSyncStatus('🟢 Ready to Play');
+            const clientAudio = document.getElementById('clientAudio');
+            clientAudio.src = URL.createObjectURL(audioBlob);
+            clientAudio.oncanplaythrough = () => {
+                updateSyncStatus('🟢 Ready to Play');
+            };
         }
     }
 
     function handleSync(data) {
         const clientAudio = document.getElementById('clientAudio');
-        const latency = (Date.now() - data.timestamp) / 1000;
-        const targetTime = data.currentTime + latency;
+        if (!clientAudio.src) return;
 
-        if (Math.abs(clientAudio.currentTime - targetTime) > 0.05) {
-            clientAudio.currentTime = targetTime;
+        const now = Date.now() + serverTimeOffset;
+        if (!syncStartTime) {
+            syncStartTime = data.startTime;
+            const delay = Math.max(0, data.startTime - now);
+            setTimeout(() => {
+                clientAudio.currentTime = 0;
+                if (data.playing) {
+                    clientAudio.play().catch(err => console.error('Play error:', err));
+                }
+            }, delay);
         }
-        
+
+        const elapsed = (now - syncStartTime) / 1000;
+        if (data.playing && Math.abs(clientAudio.currentTime - elapsed) > 0.02) {
+            clientAudio.currentTime = elapsed;
+        }
+
         clientAudio.playbackRate = data.playbackRate;
-        if (clientAudio.paused) clientAudio.play();
+        if (data.playing && clientAudio.paused) {
+            clientAudio.play().catch(err => console.error('Play error:', err));
+        } else if (!data.playing && !clientAudio.paused) {
+            clientAudio.pause();
+        }
         updateSyncStatus('🟢 Synchronized');
     }
 
-    function handlePause() {
-        document.getElementById('clientAudio').pause();
+    function handlePause(data) {
+        const clientAudio = document.getElementById('clientAudio');
+        clientAudio.pause();
+        clientAudio.currentTime = data.currentTime;
         updateSyncStatus('⏸ Paused');
     }
 
@@ -505,6 +560,7 @@
         const clientAudio = document.getElementById('clientAudio');
         clientAudio.pause();
         clientAudio.currentTime = 0;
+        syncStartTime = 0;
         updateSyncStatus('⏹ Stopped');
     }
 
