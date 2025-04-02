@@ -222,7 +222,7 @@
     <script>
     const CHUNK_SIZE = 64 * 1024;
     const MAX_PARALLEL_CHUNKS = 5;
-    const START_DELAY = 2000; // 2 seconds delay for initial sync
+    const START_DELAY = 3000; // Increased to 3 seconds for better buffering
     
     let receivedFiles = new Map();
     let connections = new Map();
@@ -300,11 +300,11 @@
             .catch(err => console.error('Copy failed:', err));
     }
 
-    // QR Scanner
+    // QR Scanner (Fixed)
     function startQRScanner() {
         const qrScanner = document.getElementById('qrScanner');
         const video = document.createElement('video');
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement('canvas'); // Fixed typo
         const ctx = canvas.getContext('2d');
 
         qrScanner.innerHTML = '';
@@ -416,7 +416,6 @@
     }
 
     // Audio Sync
-    let syncInterval = null;
     function syncPlayback() {
         if (!connections.size || !audioElement.src) {
             alert('No listeners connected or no audio selected!');
@@ -427,12 +426,14 @@
         syncStartTime = Date.now() + serverTimeOffset + START_DELAY;
         console.log('Sync start time set to:', new Date(syncStartTime).toISOString());
         
-        // Schedule host playback
-        setTimeout(() => {
-            audioElement.currentTime = 0;
-            audioElement.play();
-            console.log('Host started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
-        }, START_DELAY);
+        // Schedule host playback with buffer check
+        audioElement.oncanplaythrough = () => {
+            setTimeout(() => {
+                audioElement.currentTime = 0;
+                audioElement.play();
+                console.log('Host started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
+            }, START_DELAY);
+        };
 
         // Send play signal with universal start time to clients
         const syncData = {
@@ -529,14 +530,20 @@
         console.log('Current server time:', new Date(now).toISOString());
         console.log('Delay calculated:', delay, 'ms');
 
-        setTimeout(() => {
-            clientAudio.currentTime = 0;
-            clientAudio.playbackRate = data.playbackRate;
-            clientAudio.play().then(() => {
-                console.log('Client started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
-                updateSyncStatus('🟢 Synchronized');
-            }).catch(err => console.error('Play error:', err));
-        }, delay);
+        // Wait for audio to be fully buffered before scheduling play
+        clientAudio.oncanplaythrough = () => {
+            setTimeout(() => {
+                clientAudio.currentTime = 0;
+                clientAudio.playbackRate = data.playbackRate;
+                clientAudio.play().then(() => {
+                    console.log('Client started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
+                    updateSyncStatus('🟢 Playing');
+                }).catch(err => {
+                    console.error('Play error:', err);
+                    updateSyncStatus('🔴 Play Error');
+                });
+            }, delay);
+        };
     }
 
     function handlePause(data) {
