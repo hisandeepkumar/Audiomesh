@@ -222,7 +222,6 @@
     <script>
     const CHUNK_SIZE = 64 * 1024;
     const MAX_PARALLEL_CHUNKS = 5;
-    const SYNC_INTERVAL = 100; // 100ms for continuous sync
     const START_DELAY = 2000; // 2 seconds delay for initial sync
     
     let receivedFiles = new Map();
@@ -305,7 +304,7 @@
     function startQRScanner() {
         const qrScanner = document.getElementById('qrScanner');
         const video = document.createElement('video');
-        const canvas =Element('canvas');
+        const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
         qrScanner.innerHTML = '';
@@ -426,31 +425,28 @@
         
         // Set universal start time based on server time
         syncStartTime = Date.now() + serverTimeOffset + START_DELAY;
+        console.log('Sync start time set to:', new Date(syncStartTime).toISOString());
         
         // Schedule host playback
         setTimeout(() => {
             audioElement.currentTime = 0;
             audioElement.play();
+            console.log('Host started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
         }, START_DELAY);
 
-        // Send sync data to clients
-        clearInterval(syncInterval);
-        syncInterval = setInterval(() => {
-            const syncData = {
-                type: 'sync',
-                startTime: syncStartTime,
-                playbackRate: audioElement.playbackRate,
-                playing: !audioElement.paused
-            };
-            connections.forEach(conn => conn.send(syncData));
-        }, SYNC_INTERVAL);
+        // Send play signal with universal start time to clients
+        const syncData = {
+            type: 'play',
+            startTime: syncStartTime,
+            playbackRate: audioElement.playbackRate
+        };
+        connections.forEach(conn => conn.send(syncData));
     }
 
     function pausePlayback() {
         if (!syncStartTime) return;
         
         audioElement.pause();
-        clearInterval(syncInterval);
         const elapsed = (Date.now() + serverTimeOffset - syncStartTime) / 1000;
         const syncData = {
             type: 'pause',
@@ -463,7 +459,6 @@
     function stopPlayback() {
         audioElement.pause();
         audioElement.currentTime = 0;
-        clearInterval(syncInterval);
         syncStartTime = 0;
         connections.forEach(conn => conn.send({ 
             type: 'stop', 
@@ -480,8 +475,8 @@
             case 'audio-chunk':
                 handleAudioChunk(data);
                 break;
-            case 'sync':
-                handleSync(data);
+            case 'play':
+                handlePlay(data);
                 break;
             case 'pause':
                 handlePause(data);
@@ -519,34 +514,29 @@
         }
     }
 
-    function handleSync(data) {
+    function handlePlay(data) {
         const clientAudio = document.getElementById('clientAudio');
-        if (!clientAudio.src) return;
+        if (!clientAudio.src) {
+            updateSyncStatus('🔴 Audio not loaded');
+            return;
+        }
 
+        syncStartTime = data.startTime;
         const now = Date.now() + serverTimeOffset;
-        if (!syncStartTime) {
-            syncStartTime = data.startTime;
-            const delay = Math.max(0, data.startTime - now);
-            setTimeout(() => {
-                clientAudio.currentTime = 0;
-                if (data.playing) {
-                    clientAudio.play().catch(err => console.error('Play error:', err));
-                }
-            }, delay);
-        }
+        const delay = Math.max(0, syncStartTime - now);
 
-        const elapsed = (now - syncStartTime) / 1000;
-        if (data.playing && Math.abs(clientAudio.currentTime - elapsed) > 0.02) {
-            clientAudio.currentTime = elapsed;
-        }
+        console.log('Client received play signal. Start time:', new Date(syncStartTime).toISOString());
+        console.log('Current server time:', new Date(now).toISOString());
+        console.log('Delay calculated:', delay, 'ms');
 
-        clientAudio.playbackRate = data.playbackRate;
-        if (data.playing && clientAudio.paused) {
-            clientAudio.play().catch(err => console.error('Play error:', err));
-        } else if (!data.playing && !clientAudio.paused) {
-            clientAudio.pause();
-        }
-        updateSyncStatus('🟢 Synchronized');
+        setTimeout(() => {
+            clientAudio.currentTime = 0;
+            clientAudio.playbackRate = data.playbackRate;
+            clientAudio.play().then(() => {
+                console.log('Client started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
+                updateSyncStatus('🟢 Synchronized');
+            }).catch(err => console.error('Play error:', err));
+        }, delay);
     }
 
     function handlePause(data) {
