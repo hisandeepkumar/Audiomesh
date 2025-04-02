@@ -222,36 +222,19 @@
     <script>
     const CHUNK_SIZE = 64 * 1024;
     const MAX_PARALLEL_CHUNKS = 5;
-    const START_DELAY = 3000; // 3 seconds delay for buffering
+    const SYNC_INTERVAL = 1000;
     
     let receivedFiles = new Map();
     let connections = new Map();
     let peer = null;
     let isHost = false;
-    let syncStartTime = 0; // Universal start time in milliseconds
-    let serverTimeOffset = 0; // Offset from local time to server time
-    let isPlaying = false; // Track playback state
-
-    // Fetch server time from an external source
-    async function getServerTime() {
-        try {
-            const response = await fetch('https://worldtimeapi.org/api/timezone/UTC');
-            const data = await response.json();
-            return data.unixtime * 1000; // Convert to milliseconds
-        } catch (err) {
-            console.error('Failed to fetch server time:', err);
-            return Date.now(); // Fallback to local time if server fetch fails
-        }
-    }
 
     // Initialize PeerJS
-    async function initializePeer() {
-        peer = new Peer({ debug: 2 });
-
-        // Get server time offset on initialization
-        const serverTime = await getServerTime();
-        serverTimeOffset = serverTime - Date.now();
-        console.log('Server time offset:', serverTimeOffset);
+    function initializePeer() {
+        // Using default PeerJS server for simplicity
+        peer = new Peer({
+            debug: 2 // Enable debug logging to troubleshoot
+        });
 
         peer.on('open', (id) => {
             document.getElementById('myId').textContent = id;
@@ -259,9 +242,9 @@
                 text: id,
                 width: 150,
                 height: 150,
-                colorDark: "#00FF00",
-                colorLight: "#FFFFFF",
-                correctLevel: QRCode.CorrectLevel.H
+                colorDark: "#00FF00",  // Green QR code
+                colorLight: "#FFFFFF", // White background
+                correctLevel: QRCode.CorrectLevel.H // High error correction
             });
             console.log('Peer ID generated:', id);
         });
@@ -332,6 +315,7 @@
 
                     if (code) {
                         connectToPeer(code.data);
+                        // Clean up camera
                         stream.getTracks().forEach(track => track.stop());
                         qrScanner.style.display = 'none';
                         qrScanner.innerHTML = '';
@@ -417,78 +401,40 @@
     }
 
     // Audio Sync
+    let syncInterval = null;
     function syncPlayback() {
-        if (!connections.size || !audioElement.src) {
-            alert('No listeners connected or no audio selected!');
-            return;
-        }
-        if (isPlaying) return; // Prevent multiple plays
+        if (!connections.size) return;
         
-        // Set universal start time based on server time
-        syncStartTime = Date.now() + serverTimeOffset + START_DELAY;
-        console.log('Sync start time set to:', new Date(syncStartTime).toISOString());
-        
-        // Schedule host playback with buffer check
-        const playHandler = () => {
-            setTimeout(() => {
-                audioElement.currentTime = 0;
-                audioElement.play();
-                isPlaying = true;
-                console.log('Host started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
-                audioElement.removeEventListener('canplaythrough', playHandler); // Remove listener
-            }, START_DELAY);
-        };
-        audioElement.addEventListener('canplaythrough', playHandler);
-
-        // Send play signal with universal start time to clients
-        const syncData = {
-            type: 'play',
-            startTime: syncStartTime,
-            playbackRate: audioElement.playbackRate
-        };
-        connections.forEach(conn => conn.send(syncData));
+        audioElement.play();
+        clearInterval(syncInterval);
+        syncInterval = setInterval(() => {
+            const syncData = {
+                type: 'sync',
+                timestamp: Date.now(),
+                currentTime: audioElement.currentTime,
+                playbackRate: audioElement.playbackRate
+            };
+            connections.forEach(conn => conn.send(syncData));
+        }, SYNC_INTERVAL);
     }
 
     function pausePlayback() {
-        if (!syncStartTime || !isPlaying) return;
-        
-        // Pause on host
         audioElement.pause();
-        isPlaying = false;
-        const elapsed = (Date.now() + serverTimeOffset - syncStartTime) / 1000;
-        console.log('Host paused at:', new Date(Date.now() + serverTimeOffset).toISOString(), 'Elapsed:', elapsed);
-
-        // Send pause signal to clients
-        const syncData = {
-            type: 'pause',
-            startTime: syncStartTime,
-            currentTime: elapsed
-        };
-        connections.forEach(conn => {
-            conn.send(syncData);
-            console.log('Pause signal sent to:', conn.peer);
-        });
+        clearInterval(syncInterval);
+        connections.forEach(conn => conn.send({ 
+            type: 'pause', 
+            timestamp: Date.now() 
+        }));
     }
 
     function stopPlayback() {
-        if (!syncStartTime) return;
-        
-        // Stop on host
         audioElement.pause();
         audioElement.currentTime = 0;
-        isPlaying = false;
-        syncStartTime = 0;
-        console.log('Host stopped at:', new Date(Date.now() + serverTimeOffset).toISOString());
-
-        // Send stop signal to clients
-        const syncData = {
-            type: 'stop',
-            timestamp: Date.now() + serverTimeOffset
-        };
-        connections.forEach(conn => {
-            conn.send(syncData);
-            console.log('Stop signal sent to:', conn.peer);
-        });
+        clearInterval(syncInterval);
+        connections.forEach(conn => conn.send({ 
+            type: 'stop', 
+            timestamp: Date.now() 
+        }));
     }
 
     // Data Handler
@@ -500,11 +446,11 @@
             case 'audio-chunk':
                 handleAudioChunk(data);
                 break;
-            case 'play':
-                handlePlay(data);
+            case 'sync':
+                handleSync(data);
                 break;
             case 'pause':
-                handlePause(data);
+                handlePause();
                 break;
             case 'stop':
                 handleStop();
@@ -531,69 +477,34 @@
 
         if(file.received >= file.size) {
             const audioBlob = new Blob(file.chunks, { type: file.mime });
-            const clientAudio = document.getElementById('clientAudio');
-            clientAudio.src = URL.createObjectURL(audioBlob);
-            clientAudio.oncanplaythrough = () => {
-                updateSyncStatus('🟢 Ready to Play');
-            };
+            document.getElementById('clientAudio').src = URL.createObjectURL(audioBlob);
+            updateSyncStatus('🟢 Ready to Play');
         }
     }
 
-    function handlePlay(data) {
+    function handleSync(data) {
         const clientAudio = document.getElementById('clientAudio');
-        if (!clientAudio.src) {
-            updateSyncStatus('🔴 Audio not loaded');
-            return;
+        const latency = (Date.now() - data.timestamp) / 1000;
+        const targetTime = data.currentTime + latency;
+
+        if (Math.abs(clientAudio.currentTime - targetTime) > 0.05) {
+            clientAudio.currentTime = targetTime;
         }
-        if (isPlaying) return; // Prevent multiple plays
-
-        syncStartTime = data.startTime;
-        const now = Date.now() + serverTimeOffset;
-        const delay = Math.max(0, syncStartTime - now);
-
-        console.log('Client received play signal. Start time:', new Date(syncStartTime).toISOString());
-        console.log('Current server time:', new Date(now).toISOString());
-        console.log('Delay calculated:', delay, 'ms');
-
-        // Wait for audio to be fully buffered before scheduling play
-        const playHandler = () => {
-            setTimeout(() => {
-                clientAudio.currentTime = 0;
-                clientAudio.playbackRate = data.playbackRate;
-                clientAudio.play().then(() => {
-                    isPlaying = true;
-                    console.log('Client started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
-                    updateSyncStatus('🟢 Playing');
-                }).catch(err => {
-                    console.error('Play error:', err);
-                    updateSyncStatus('🔴 Play Error');
-                });
-                clientAudio.removeEventListener('canplaythrough', playHandler); // Remove listener
-            }, delay);
-        };
-        clientAudio.addEventListener('canplaythrough', playHandler);
+        
+        clientAudio.playbackRate = data.playbackRate;
+        if (clientAudio.paused) clientAudio.play();
+        updateSyncStatus('🟢 Synchronized');
     }
 
-    function handlePause(data) {
-        const clientAudio = document.getElementById('clientAudio');
-        if (!clientAudio.src || !isPlaying) return;
-
-        clientAudio.pause();
-        clientAudio.currentTime = data.currentTime;
-        isPlaying = false;
-        console.log('Client paused at:', new Date(Date.now() + serverTimeOffset).toISOString(), 'Current time set to:', data.currentTime);
+    function handlePause() {
+        document.getElementById('clientAudio').pause();
         updateSyncStatus('⏸ Paused');
     }
 
     function handleStop() {
         const clientAudio = document.getElementById('clientAudio');
-        if (!clientAudio.src) return;
-
         clientAudio.pause();
         clientAudio.currentTime = 0;
-        isPlaying = false;
-        syncStartTime = 0;
-        console.log('Client stopped at:', new Date(Date.now() + serverTimeOffset).toISOString());
         updateSyncStatus('⏹ Stopped');
     }
 
