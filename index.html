@@ -11,27 +11,167 @@
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     
     <style>
-        /* Existing styles remain same */
-        
-        /* Add Audio Player Styles */
-        .audio-player {
-            background: #002850;
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        
-        .audio-controls {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            margin-top: 15px;
-        }
-        
-        .audio-controls button {
-            width: auto;
-            padding: 12px 25px;
-        }
+        /* General Styles */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #001f3f;
+    color: white;
+    text-align: center;
+    margin: 0;
+    padding: 20px;
+}
+
+/* Main Container */
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+/* Panels */
+.panel {
+    background: #003366;
+    padding: 20px;
+    border-radius: 15px;
+    width: 350px;
+    box-shadow: 0px 0px 10px rgba(0, 255, 255, 0.5);
+    text-align: center;
+}
+
+/* ID Box */
+.id-box {
+    background: #004080;
+    padding: 10px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+    font-size: 18px;
+}
+
+/* Copy Button */
+.copy-btn {
+    background: #ffcc00;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.copy-btn:hover {
+    background: #ffaa00;
+}
+
+/* QR Code Container */
+.qr-container {
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+}
+
+/* Scan Button */
+.scan-btn {
+    background: #ff6600;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-radius: 5px;
+    color: white;
+    font-weight: bold;
+    font-size: 16px;
+    margin-top: 10px;
+}
+
+.scan-btn:hover {
+    background: #cc5500;
+}
+
+/* Hidden Scanner */
+#qrScanner {
+    width: 250px;
+    height: 250px;
+    margin: auto;
+    display: none;
+    border: 2px solid white;
+}
+
+/* File Input Button */
+button {
+    background: #0073e6;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-radius: 5px;
+    color: white;
+    font-weight: bold;
+    font-size: 16px;
+    margin-top: 10px;
+}
+
+button:hover {
+    background: #005bb5;
+}
+
+/* Audio Player Styling */
+.audio-player {
+    background: #002850;
+    border-radius: 15px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0px 0px 10px rgba(0, 255, 255, 0.3);
+}
+
+audio {
+    width: 100%;
+    border-radius: 10px;
+}
+
+/* Audio Controls */
+.audio-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.audio-controls button {
+    width: auto;
+    padding: 12px 25px;
+    background: #00cc99;
+    border: none;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+.audio-controls button:hover {
+    background: #009977;
+}
+
+/* Sync Status */
+#syncStatus {
+    margin-top: 10px;
+    font-weight: bold;
+    font-size: 18px;
+    color: #00ff00;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .panel {
+        width: 90%;
+    }
+}
     </style>
 </head>
 <body>
@@ -78,7 +218,73 @@
 
     <script>
     // Existing PeerJS and QR code setup remains same
-    
+    const CHUNK_SIZE = 64 * 1024; // 64 KB per chunk
+const MAX_PARALLEL_CHUNKS = 5;
+let receivedFiles = new Map();
+let conn = null;
+let peer = null;
+
+// Initialize PeerJS
+function initializePeer() {
+    peer = new Peer();
+
+    peer.on('open', (id) => {
+        document.getElementById('myId').textContent = id;
+        new QRCode(document.getElementById('senderQr'), id);
+    });
+
+    peer.on('connection', (connection) => {
+        conn = connection;
+        conn.on('data', handleIncomingData);
+    });
+}
+
+// Copy ID Function
+function copyID() {
+    navigator.clipboard.writeText(document.getElementById('myId').textContent);
+    alert('ID copied to clipboard!');
+}
+
+// QR Scanner Function
+function startQRScanner() {
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    document.getElementById('qrScanner').appendChild(video);
+    document.getElementById('qrScanner').style.display = 'block';
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then((stream) => {
+            video.srcObject = stream;
+            video.play();
+
+            const scan = () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+                if (code) {
+                    connectToPeer(code.data);
+                    stream.getTracks().forEach(track => track.stop());
+                    document.getElementById('qrScanner').style.display = 'none';
+                } else {
+                    requestAnimationFrame(scan);
+                }
+            };
+            scan();
+        });
+}
+
+// Connect to Peer Function
+function connectToPeer(peerId) {
+    conn = peer.connect(peerId);
+    conn.on('open', () => console.log('Connected to Host!'));
+    conn.on('data', handleIncomingData);
+}
     // Audio Sync Variables
     let audioElement = document.getElementById('mainAudio');
     let audioBlob = null;
