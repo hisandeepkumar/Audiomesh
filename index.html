@@ -222,7 +222,7 @@
     <script>
     const CHUNK_SIZE = 64 * 1024;
     const MAX_PARALLEL_CHUNKS = 5;
-    const START_DELAY = 3000; // Increased to 3 seconds for better buffering
+    const START_DELAY = 3000; // 3 seconds delay for buffering
     
     let receivedFiles = new Map();
     let connections = new Map();
@@ -230,6 +230,7 @@
     let isHost = false;
     let syncStartTime = 0; // Universal start time in milliseconds
     let serverTimeOffset = 0; // Offset from local time to server time
+    let isPlaying = false; // Track playback state
 
     // Fetch server time from an external source
     async function getServerTime() {
@@ -300,11 +301,11 @@
             .catch(err => console.error('Copy failed:', err));
     }
 
-    // QR Scanner (Fixed)
+    // QR Scanner
     function startQRScanner() {
         const qrScanner = document.getElementById('qrScanner');
         const video = document.createElement('video');
-        const canvas = document.createElement('canvas'); // Fixed typo
+        const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
         qrScanner.innerHTML = '';
@@ -421,19 +422,23 @@
             alert('No listeners connected or no audio selected!');
             return;
         }
+        if (isPlaying) return; // Prevent multiple plays
         
         // Set universal start time based on server time
         syncStartTime = Date.now() + serverTimeOffset + START_DELAY;
         console.log('Sync start time set to:', new Date(syncStartTime).toISOString());
         
         // Schedule host playback with buffer check
-        audioElement.oncanplaythrough = () => {
+        const playHandler = () => {
             setTimeout(() => {
                 audioElement.currentTime = 0;
                 audioElement.play();
+                isPlaying = true;
                 console.log('Host started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
+                audioElement.removeEventListener('canplaythrough', playHandler); // Remove listener
             }, START_DELAY);
         };
+        audioElement.addEventListener('canplaythrough', playHandler);
 
         // Send play signal with universal start time to clients
         const syncData = {
@@ -445,9 +450,10 @@
     }
 
     function pausePlayback() {
-        if (!syncStartTime) return;
+        if (!syncStartTime || !isPlaying) return;
         
         audioElement.pause();
+        isPlaying = false;
         const elapsed = (Date.now() + serverTimeOffset - syncStartTime) / 1000;
         const syncData = {
             type: 'pause',
@@ -460,6 +466,7 @@
     function stopPlayback() {
         audioElement.pause();
         audioElement.currentTime = 0;
+        isPlaying = false;
         syncStartTime = 0;
         connections.forEach(conn => conn.send({ 
             type: 'stop', 
@@ -521,6 +528,7 @@
             updateSyncStatus('🔴 Audio not loaded');
             return;
         }
+        if (isPlaying) return; // Prevent multiple plays
 
         syncStartTime = data.startTime;
         const now = Date.now() + serverTimeOffset;
@@ -531,25 +539,29 @@
         console.log('Delay calculated:', delay, 'ms');
 
         // Wait for audio to be fully buffered before scheduling play
-        clientAudio.oncanplaythrough = () => {
+        const playHandler = () => {
             setTimeout(() => {
                 clientAudio.currentTime = 0;
                 clientAudio.playbackRate = data.playbackRate;
                 clientAudio.play().then(() => {
+                    isPlaying = true;
                     console.log('Client started playing at:', new Date(Date.now() + serverTimeOffset).toISOString());
                     updateSyncStatus('🟢 Playing');
                 }).catch(err => {
                     console.error('Play error:', err);
                     updateSyncStatus('🔴 Play Error');
                 });
+                clientAudio.removeEventListener('canplaythrough', playHandler); // Remove listener
             }, delay);
         };
+        clientAudio.addEventListener('canplaythrough', playHandler);
     }
 
     function handlePause(data) {
         const clientAudio = document.getElementById('clientAudio');
         clientAudio.pause();
         clientAudio.currentTime = data.currentTime;
+        isPlaying = false;
         updateSyncStatus('⏸ Paused');
     }
 
@@ -557,6 +569,7 @@
         const clientAudio = document.getElementById('clientAudio');
         clientAudio.pause();
         clientAudio.currentTime = 0;
+        isPlaying = false;
         syncStartTime = 0;
         updateSyncStatus('⏹ Stopped');
     }
