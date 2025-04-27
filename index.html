@@ -91,10 +91,29 @@
         }).catch(()=>{ updateSyncStatus('🔴 Camera Denied'); qr.style.display='none'; });
     }
     function connectToPeer(id){ if(!id||connections.has(id))return; const conn=peer.connect(id,{reliable:true}); setupConnection(conn); updateSyncStatus('🟡 Connecting'); conn.on('open',()=>{ updateSyncStatus('🟢 Connected'); onBecomeListener(); }); }
-    function onBecomeListener(){ hostPanel.style.display='none'; listenerPanel.style.display='none'; const canvas=visualizer, audio=clientAudio;
-        canvas.style.display='block'; canvas.classList.add('fullscreen'); canvas.width=innerWidth; canvas.height=innerHeight; document.body.classList.add('fullscreen'); startVisualizer(audio,canvas);
-        window.onresize=()=>{ canvas.width=innerWidth; canvas.height=innerHeight; };
-    }
+   function onBecomeListener() {
+    hostPanel.style.display = 'none';
+    listenerPanel.style.display = 'none';
+    
+    const canvas = visualizer;
+    const audio = clientAudio;
+
+    window.onresize = () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    };
+
+    // Jab audio ready ho tab visualizer shuru karo
+    clientAudio.addEventListener('canplay', () => {
+        canvas.style.display = 'block';
+        canvas.classList.add('fullscreen');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        document.body.classList.add('fullscreen');
+
+        startVisualizer(audio, canvas); // Visualizer ko safe audio ke saath start karo
+    });
+}
     async function transferAudioFile(file){ const id=Date.now()+'-'+Math.random().toString(36).slice(2), total=Math.ceil(file.size/CHUNK_SIZE);
         connections.forEach(c=>c.send({type:'audio-metadata',id,name:file.name,size:file.size,mime:file.type,totalChunks:total}));
         let indices=[...Array(total).keys()]; while(indices.length){ const batch=indices.splice(0,MAX_PARALLEL_CHUNKS); await Promise.all(batch.map(i=>sendChunk(file,i,id))); }
