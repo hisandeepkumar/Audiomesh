@@ -357,6 +357,238 @@
     // Copy ID, QR Scanner, Audio Handling, Sync Functions, etc.
     // These functions remain unchanged from your original code
 
+         // Copy ID
+    function copyID() {
+        navigator.clipboard.writeText(document.getElementById('myId').textContent)
+            .then(() => alert('ID copied to clipboard!'))
+            .catch(err => console.error('Copy failed:', err));
+    }
+
+    // QR Scanner
+    function startQRScanner() {
+        const qrScanner = document.getElementById('qrScanner');
+        const video = document.createElement('video');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        qrScanner.innerHTML = '';
+        qrScanner.appendChild(video);
+        qrScanner.style.display = 'block';
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then((stream) => {
+                video.srcObject = stream;
+                video.play();
+
+                function scan() {
+                    if (!video.videoWidth) {
+                        requestAnimationFrame(scan);
+                        return;
+                    }
+
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+                    if (code) {
+                        connectToPeer(code.data);
+                        // Clean up camera
+                        stream.getTracks().forEach(track => track.stop());
+                        qrScanner.style.display = 'none';
+                        qrScanner.innerHTML = '';
+                    } else {
+                        requestAnimationFrame(scan);
+                    }
+                }
+                scan();
+            })
+            .catch(err => {
+                console.error('Camera error:', err);
+                updateSyncStatus('🔴 Camera Access Denied');
+                qrScanner.style.display = 'none';
+            });
+    }
+
+    // Connect to Peer
+    function connectToPeer(peerId) {
+        if (!peerId || connections.has(peerId)) return;
+        
+        const conn = peer.connect(peerId, { reliable: true });
+        setupConnection(conn);
+        updateSyncStatus('🟡 Connecting...');
+        conn.on('open', () => {
+            updateSyncStatus('🟢 Connected');
+            console.log('Successfully connected to:', peerId);
+        });
+    }
+
+    // Audio Handling
+    const audioElement = document.getElementById('mainAudio');
+    document.getElementById('audioInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file.type.startsWith('audio/')) {
+            alert('Please select an audio file!');
+            return;
+        }
+        
+        transferAudioFile(file);
+        audioElement.src = URL.createObjectURL(file);
+    });
+
+    async function transferAudioFile(file) {
+        const fileId = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        
+        const metadata = {
+            type: 'audio-metadata',
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            mime: file.type,
+            totalChunks
+        };
+
+        connections.forEach(conn => conn.send(metadata));
+
+        const chunks = Array.from({length: totalChunks}, (_,i) => i);
+        while(chunks.length) {
+            const batch = chunks.splice(0, MAX_PARALLEL_CHUNKS);
+            await Promise.all(batch.map(i => sendAudioChunk(file, i, fileId)));
+        }
+    }
+
+    async function sendAudioChunk(file, index, fileId) {
+        return new Promise(resolve => {
+            const reader = new FileReader();
+            const start = index * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            
+            reader.onload = () => {
+                const chunk = {
+                    type: 'audio-chunk',
+                    id: fileId,
+                    index,
+                    data: reader.result
+                };
+                connections.forEach(conn => conn.send(chunk));
+                resolve();
+            };
+            reader.readAsArrayBuffer(file.slice(start, end));
+        });
+    }
+
+    // Audio Sync
+    let syncInterval = null;
+    function syncPlayback() {
+        if (!connections.size) return;
+        
+        audioElement.play();
+        clearInterval(syncInterval);
+        syncInterval = setInterval(() => {
+            const syncData = {
+                type: 'sync',
+                timestamp: Date.now(),
+                currentTime: audioElement.currentTime,
+                playbackRate: audioElement.playbackRate
+            };
+            connections.forEach(conn => conn.send(syncData));
+        }, SYNC_INTERVAL);
+    }
+
+    function pausePlayback() {
+        audioElement.pause();
+        clearInterval(syncInterval);
+        connections.forEach(conn => conn.send({ 
+            type: 'pause', 
+            timestamp: Date.now() 
+        }));
+    }
+
+    function stopPlayback() {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+        clearInterval(syncInterval);
+        connections.forEach(conn => conn.send({ 
+            type: 'stop', 
+            timestamp: Date.now() 
+        }));
+    }
+
+    // Data Handler
+    function handleIncomingData(data) {
+        switch(data.type) {
+            case 'audio-metadata':
+                handleAudioMetadata(data);
+                break;
+            case 'audio-chunk':
+                handleAudioChunk(data);
+                break;
+            case 'sync':
+                handleSync(data);
+                break;
+            case 'pause':
+                handlePause();
+                break;
+            case 'stop':
+                handleStop();
+                break;
+        }
+    }
+
+    function handleAudioMetadata(meta) {
+        receivedFiles.set(meta.id, {
+            name: meta.name,
+            chunks: new Array(meta.totalChunks),
+            received: 0,
+            size: meta.size,
+            mime: meta.mime
+        });
+    }
+
+    function handleAudioChunk(chunk) {
+        const file = receivedFiles.get(chunk.id);
+        if (!file) return;
+
+        file.chunks[chunk.index] = chunk.data;
+        file.received += chunk.data.byteLength;
+
+        if(file.received >= file.size) {
+            const audioBlob = new Blob(file.chunks, { type: file.mime });
+            document.getElementById('clientAudio').src = URL.createObjectURL(audioBlob);
+            updateSyncStatus('🟢 Ready to Play');
+        }
+    }
+
+    function handleSync(data) {
+        const clientAudio = document.getElementById('clientAudio');
+        const latency = (Date.now() - data.timestamp) / 1000;
+        const targetTime = data.currentTime + latency;
+
+        if (Math.abs(clientAudio.currentTime - targetTime) > 0.05) {
+            clientAudio.currentTime = targetTime;
+        }
+        
+        clientAudio.playbackRate = data.playbackRate;
+        if (clientAudio.paused) clientAudio.play();
+        updateSyncStatus('🟢 Synchronized');
+    }
+
+    function handlePause() {
+        document.getElementById('clientAudio').pause();
+        updateSyncStatus('⏸ Paused');
+    }
+
+    function handleStop() {
+        const clientAudio = document.getElementById('clientAudio');
+        clientAudio.pause();
+        clientAudio.currentTime = 0;
+        updateSyncStatus('⏹ Stopped');
+    }
+
+
     // Utility Functions
     function updateSyncStatus(status) {
         document.getElementById('syncStatus').textContent = status || '🟢 Synchronized';
