@@ -11,7 +11,7 @@
     <style>
         body { 
             font-family: Arial, sans-serif; 
-            background-color: #001f3f; 
+            background-color: #000; 
             color: white; 
             text-align: center; 
             margin: 0; 
@@ -107,8 +107,7 @@
         }
         #visualizer { 
             width: 100%; 
-            height: 200px; 
-            border-radius: 10px; 
+            height: 100vh; /* Full screen height */
             background: #000; 
             display: none; 
         }
@@ -126,6 +125,7 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
+            background: #000;
         }
         @media (max-width: 768px) { 
             .container { 
@@ -433,34 +433,96 @@
         }); 
     }
 
-    // Visualizer ko music ke saath color change karne ke liye
+    // Modern Visualizer with Circular Waves and Particles
     function startVisualizer(audioElement, canvas) {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const src = ctx.createMediaElementSource(audioElement);
-        const analyser = ctx.createAnalyser(); 
-        analyser.fftSize = 256;
-        src.connect(analyser); 
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512; // Higher FFT size for smoother visuals
+        src.connect(analyser);
         analyser.connect(ctx.destination);
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         const cctx = canvas.getContext('2d');
-        
+
+        // Particle system
+        const particles = [];
+        const particleCount = 100;
+        for (let i = 0; i < particleCount; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 5 + 2,
+                speedX: (Math.random() - 0.5) * 2,
+                speedY: (Math.random() - 0.5) * 2,
+                hue: Math.random() * 360
+            });
+        }
+
         function draw() {
             requestAnimationFrame(draw);
             analyser.getByteFrequencyData(dataArray);
-            cctx.clearRect(0, 0, canvas.width, canvas.height);
-            const barWidth = (canvas.width / bufferLength) * 2.5;
-            let x = 0;
-            for (let i = 0; i < bufferLength; i++) {
-                const barHeight = dataArray[i] / 2;
-                // Hue ko frequency ke saath change karein (0-360)
-                const hue = (i / bufferLength) * 360;
-                // Lightness ko amplitude ke saath adjust karein (50%-100%)
-                const lightness = Math.min(50 + (dataArray[i] / 255) * 50, 100);
-                cctx.fillStyle = `hsl(${hue}, 100%, ${lightness}%)`;
-                cctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-                x += barWidth + 1;
+            cctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; // Slight fade for trails
+            cctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Circular wave effect
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const maxRadius = Math.min(canvas.width, canvas.height) * 0.4;
+            const averageAmplitude = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+
+            // Draw multiple concentric waves
+            for (let i = 0; i < 5; i++) {
+                const waveRadius = maxRadius * (1 - i * 0.2) + (averageAmplitude / 255) * 50;
+                const hue = (Date.now() / 20 + i * 60) % 360; // Dynamic hue shift
+                cctx.beginPath();
+                cctx.arc(centerX, centerY, waveRadius, 0, Math.PI * 2);
+                cctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
+                cctx.lineWidth = 5 + i * 2;
+                cctx.shadowBlur = 20;
+                cctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+                cctx.stroke();
+                cctx.closePath();
             }
+
+            // Draw frequency-based radial bars
+            const barCount = 60;
+            const angleStep = (Math.PI * 2) / barCount;
+            for (let i = 0; i < barCount; i++) {
+                const freqIndex = Math.floor((i / barCount) * bufferLength);
+                const barHeight = (dataArray[freqIndex] / 255) * maxRadius * 0.5;
+                const hue = (i / barCount) * 360 + (Date.now() / 50) % 360;
+                const startRadius = maxRadius * 0.6;
+                cctx.beginPath();
+                cctx.moveTo(
+                    centerX + Math.cos(angleStep * i) * startRadius,
+                    centerY + Math.sin(angleStep * i) * startRadius
+                );
+                cctx.lineTo(
+                    centerX + Math.cos(angleStep * i) * (startRadius + barHeight),
+                    centerY + Math.sin(angleStep * i) * (startRadius + barHeight)
+                );
+                cctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
+                cctx.lineWidth = 4;
+                cctx.stroke();
+            }
+
+            // Draw particles
+            particles.forEach(p => {
+                p.x += p.speedX * (averageAmplitude / 255);
+                p.y += p.speedY * (averageAmplitude / 255);
+                if (p.x < 0 || p.x > canvas.width) p.speedX *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.speedY *= -1;
+                p.hue = (p.hue + (averageAmplitude / 255) * 2) % 360;
+                cctx.beginPath();
+                cctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                cctx.fillStyle = `hsl(${p.hue}, 100%, 80%)`;
+                cctx.shadowBlur = 15;
+                cctx.shadowColor = `hsl(${p.hue}, 100%, 50%)`;
+                cctx.fill();
+            });
+
+            cctx.shadowBlur = 0; // Reset shadow
         }
         draw();
     }
