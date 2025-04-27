@@ -419,114 +419,113 @@
 
     // Visualizer with Portal Effect (Your Provided Function with Minor Tweaks)
     function startVisualizer(audioElement, canvas) {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const src = ctx.createMediaElementSource(audioElement);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 256;
-        src.connect(analyser);
-        analyser.connect(ctx.destination);
-        
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        const cctx = canvas.getContext('2d');
-        
-        // Portal configuration
-        const particles = [];
-        const numParticles = 300;
-        const rings = 5;
-        const baseHue = 240; // Blue base color
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaElementSource(audioElement);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    src.connect(analyser);
+    analyser.connect(ctx.destination);
+    
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    const cctx = canvas.getContext('2d');
+    
+    // Portal configuration
+    const particles = [];
+    const numParticles = 300;
+    const rings = 5;
+    const baseHue = 240; // Blue base color
 
-        class Particle {
-            constructor() {
+    class Particle {
+        constructor() {
+            this.reset();
+            this.z = Math.random() * rings;
+        }
+
+        reset() {
+            this.angle = Math.random() * Math.PI * 2;
+            this.radius = Math.random() * 30 + 10;
+            this.speed = (Math.random() * 0.5 + 0.1) * (Math.random() < 0.5 ? 1 : -1);
+            this.size = Math.random() * 2 + 1;
+            this.hueOffset = Math.random() * 60 - 30;
+        }
+
+        update(frequency) {
+            this.angle += this.speed * (0.5 + frequency / 255);
+            this.radius += Math.sin(Date.now() * 0.001 + this.z) * 0.1;
+            
+            if (this.radius < 5 || this.radius > 150) {
                 this.reset();
-                this.z = Math.random() * rings;
-            }
-
-            reset() {
-                this.angle = Math.random() * Math.PI * 2;
-                this.radius = Math.random() * 30 + 10;
-                this.speed = (Math.random() * 0.5 + 0.1) * (Math.random() < 0.5 ? 1 : -1);
-                this.size = Math.random() * 2 + 1;
-                this.hueOffset = Math.random() * 60 - 30;
-            }
-
-            update(frequency) {
-                this.angle += this.speed * (0.5 + frequency / 255);
-                this.radius += Math.sin(Date.now() * 0.001 + this.z) * 0.1;
-                
-                if (this.radius < 5 || this.radius > 150) {
-                    this.reset();
-                }
             }
         }
+    }
 
-        // Create particles
-        for (let i = 0; i < numParticles; i++) {
-            particles.push(new Particle());
-        }
+    // Create particles
+    for (let i = 0; i < numParticles; i++) {
+        particles.push(new Particle());
+    }
 
-        function draw() {
-            requestAnimationFrame(draw);
-            analyser.getByteFrequencyData(dataArray);
-            
-            cctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
-            cctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const average = dataArray.reduce((a, b) => a + b) / bufferLength;
-            const scale = 1 + average / 200;
+    function draw() {
+        requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+        
+        cctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        cctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+        const scale = 1 + average / 200;
 
-            // Draw multiple rotating rings
-            for (let r = 0; r < rings; r++) {
-                cctx.save();
-                cctx.translate(centerX, centerY);
-                cctx.rotate(Date.now() * 0.0002 * (r % 2 ? 1 : -1));
-                
-                particles.forEach((p, i) => {
-                    if (Math.floor(p.z) !== r) return;
-                    
-                    const freq = dataArray[i % bufferLength];
-                    p.update(freq);
-                    
-                    const x = Math.cos(p.angle) * (p.radius * scale + r * 30);
-                    const y = Math.sin(p.angle) * (p.radius * scale + r * 30);
-                    
-                    // Create spark effect
-                    const gradient = cctx.createRadialGradient(x, y, 0, x, y, p.size * 2);
-                    gradient.addColorStop(0, `hsla(${baseHue + p.hueOffset}, 100%, 60%, 1)`);
-                    gradient.addColorStop(1, `hsla(${baseHue + p.hueOffset + 30}, 100%, 50%, 0)`);
-                    
-                    cctx.beginPath();
-                    cctx.arc(x, y, p.size * (1 + freq/255), 0, Math.PI * 2);
-                    cctx.fillStyle = gradient;
-                    
-                    // Add trail effect
-                    cctx.shadowColor = `hsla(${baseHue + p.hueOffset}, 100%, 50%, 0.5)`;
-                    cctx.shadowBlur = 20;
-                    cctx.fill();
-                });
-                
-                cctx.restore();
-            }
-
-            // Draw central spark
+        // Draw multiple rotating rings
+        for (let r = 0; r < rings; r++) {
             cctx.save();
             cctx.translate(centerX, centerY);
-            const centralGradient = cctx.createRadialGradient(0, 0, 0, 0, 0, 50);
-            centralGradient.addColorStop(0, `hsla(${baseHue}, 100%, 80%, 1)`);
-            centralGradient.addColorStop(1, `hsla(${baseHue + 60}, 100%, 50%, 0)`);
+            cctx.rotate(Date.now() * 0.0002 * (r % 2 ? 1 : -1));
             
-            cctx.beginPath();
-            cctx.arc(0, 0, average/5, 0, Math.PI * 2);
-            cctx.fillStyle = centralGradient;
-            cctx.shadowBlur = 50;
-            cctx.shadowColor = `hsla(${baseHue}, 100%, 50%, 0.5)`;
-            cctx.fill();
+            particles.forEach((p, i) => {
+                if (Math.floor(p.z) !== r) return;
+                
+                const freq = dataArray[i % bufferLength];
+                p.update(freq);
+                
+                const x = Math.cos(p.angle) * (p.radius * scale + r * 30);
+                const y = Math.sin(p.angle) * (p.radius * scale + r * 30);
+                
+                // Create spark effect
+                const gradient = cctx.createRadialGradient(x, y, 0, x, y, p.size * 2);
+                gradient.addColorStop(0, `hsla(${baseHue + p.hueOffset}, 100%, 60%, 1)`);
+                gradient.addColorStop(1, `hsla(${baseHue + p.hueOffset + 30}, 100%, 50%, 0)`);
+                
+                cctx.beginPath();
+                cctx.arc(x, y, p.size * (1 + freq/255), 0, Math.PI * 2);
+                cctx.fillStyle = gradient;
+                
+                // Add trail effect
+                cctx.shadowColor = `hsla(${baseHue + p.hueOffset}, 100%, 50%, 0.5)`;
+                cctx.shadowBlur = 20;
+                cctx.fill();
+            });
+            
             cctx.restore();
         }
-        draw();
+
+        // Draw central spark
+        cctx.save();
+        cctx.translate(centerX, centerY);
+        const centralGradient = cctx.createRadialGradient(0, 0, 0, 0, 0, 50);
+        centralGradient.addColorStop(0, `hsla(${baseHue}, 100%, 80%, 1)`);
+        centralGradient.addColorStop(1, `hsla(${baseHue + 60}, 100%, 50%, 0)`);
+        
+        cctx.beginPath();
+        cctx.arc(0, 0, average/5, 0, Math.PI * 2);
+        cctx.fillStyle = centralGradient;
+        cctx.shadowBlur = 50;
+        cctx.shadowColor = `hsla(${baseHue}, 100%, 50%, 0.5)`;
+        cctx.fill();
+        cctx.restore();
     }
+
 
     // Initialization
     window.addEventListener('load', initializePeer);
