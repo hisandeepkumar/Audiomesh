@@ -238,7 +238,14 @@ function startVisualizer(audioElement, canvas) {
 
     draw();
 }
-
+// Initialization
+    window.addEventListener('load', initializePeer);
+    document.getElementById('audioInput').addEventListener('change', e => { 
+        const file = e.target.files[0]; 
+        if (!file.type.startsWith('audio/')) return alert('Select audio!'); 
+        transferAudioFile(file); 
+        document.getElementById('mainAudio').src = URL.createObjectURL(file); 
+    });
     </script>
 </body>
 </html>
