@@ -4,39 +4,150 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="./manifest.json">
-    <title>🎵 P2P Audio Sync + Futuristic Visualiser</title>
+    <title>🎵 P2P Audio Sync + Visualiser</title>
     <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #000; color: #fff; text-align: center; margin: 0; padding: 20px; }
-        .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 20px; }
-        .panel { background: #003366; padding: 20px; border-radius: 15px; width: 350px; box-shadow: 0px 0px 10px rgba(0,255,255,0.5); }
-        .id-box { background: #004080; padding: 10px; border-radius: 10px; margin-bottom: 15px; font-size: 18px; }
-        button { border: none; padding: 10px 15px; cursor: pointer; border-radius: 5px; font-size: 16px; font-weight: bold; }
-        .copy-btn { background: #ffcc00; } .copy-btn:hover { background: #ffaa00; }
-        .scan-btn { background: #ff6600; color: #fff; margin: 5px 0; } .scan-btn:hover { background: #cc5500; }
-        .qr-container { margin: 10px 0; display: flex; justify-content: center; padding: 10px; background: #fff; border-radius: 10px; }
-        .audio-player { background: #002850; border-radius: 15px; padding: 20px; margin: 20px 0; box-shadow: 0px 0px 10px rgba(0,255,255,0.3); }
-        .audio-controls { display: flex; gap: 15px; justify-content: center; margin-top: 15px; }
-        .audio-controls button { background: #00cc99; } .audio-controls button:hover { background: #009977; }
-        #syncStatus { margin-top: 10px; font-weight: bold; font-size: 18px; color: #0f0; }
-        .connected-devices { margin-top: 15px; padding: 10px; background: #004080; border-radius: 10px; }
-        .device-list { list-style: none; padding: 0; }
-        #visualizer { display: none; }
-        #visualizer.fullscreen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1000; }
-        body.fullscreen { margin: 0; padding: 0; overflow: hidden; background: #000; }
-        @media (max-width: 768px) { .container { flex-direction: column; align-items: center; } .panel { width: 90%; } }
+        body { 
+            font-family: Arial, sans-serif; 
+            background-color: #000; 
+            color: white; 
+            text-align: center; 
+            margin: 0; 
+            padding: 20px; 
+        }
+        .container { 
+            display: flex; 
+            flex-wrap: wrap; 
+            justify-content: center; 
+            gap: 20px; 
+            margin-top: 20px; 
+        }
+        .panel { 
+            background: #003366; 
+            padding: 20px; 
+            border-radius: 15px; 
+            width: 350px; 
+            box-shadow: 0px 0px 10px rgba(0,255,255,0.5); 
+            text-align: center; 
+        }
+        .id-box { 
+            background: #004080; 
+            padding: 10px; 
+            border-radius: 10px; 
+            margin-bottom: 15px; 
+            font-size: 18px; 
+        }
+        .copy-btn, .scan-btn, button { 
+            border: none; 
+            padding: 10px 15px; 
+            cursor: pointer; 
+            border-radius: 5px; 
+            font-size: 16px; 
+            font-weight: bold; 
+        }
+        .copy-btn { 
+            background: #ffcc00; 
+        } 
+        .copy-btn:hover { 
+            background: #ffaa00; 
+        }
+        .scan-btn { 
+            background: #ff6600; 
+            color: white; 
+            margin: 5px 0; 
+        } 
+        .scan-btn:hover { 
+            background: #cc5500; 
+        }
+        .qr-container { 
+            margin: 10px 0; 
+            display: flex; 
+            justify-content: center; 
+            padding: 10px; 
+            background: white; 
+            border-radius: 10px; 
+        }
+        .audio-player { 
+            background: #002850; 
+            border-radius: 15px; 
+            padding: 20px; 
+            margin: 20px 0; 
+            box-shadow: 0px 0px 10px rgba(0,255,255,0.3); 
+        }
+        .audio-controls { 
+            display: flex; 
+            gap: 15px; 
+            align-items: center; 
+            justify-content: center; 
+            margin-top: 15px; 
+        }
+        .audio-controls button { 
+            background: #00cc99; 
+        } 
+        .audio-controls button:hover { 
+            background: #009977; 
+        }
+        #syncStatus { 
+            margin-top: 10px; 
+            font-weight: bold; 
+            font-size: 18px; 
+            color: #00ff00; 
+        }
+        .connected-devices { 
+            margin-top: 15px; 
+            padding: 10px; 
+            background: #004080; 
+            border-radius: 10px; 
+        }
+        .device-list { 
+            list-style: none; 
+            padding: 0; 
+        }
+        #visualizer { 
+            width: 100%; 
+            height: 100vh; 
+            background: #000; 
+            display: none; 
+        }
+        #visualizer.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1000;
+        }
+        body.fullscreen {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        @media (max-width: 768px) { 
+            .container { 
+                flex-direction: column; 
+                align-items: center; 
+            } 
+            .panel { 
+                width: 90%; 
+            } 
+        }
     </style>
 </head>
 <body>
-    <h1>🎵 P2P Audio Sync + Futuristic Visualiser</h1>
+    <h1>🎵 P2P Audio Sync + Visualiser</h1>
     <div class="container">
+        <!-- Host Panel -->
         <div class="panel" id="hostPanel">
             <h2>🎧 Host Controls</h2>
-            <div class="id-box">🔑 Your ID: <strong id="myId">...</strong> <button class="copy-btn" onclick="copyID()">Copy</button></div>
+            <div class="id-box">
+                🔑 Your ID: <strong id="myId">Generating ID...</strong>
+                <button class="copy-btn" onclick="copyID()">Copy</button>
+            </div>
             <div class="qr-container" id="senderQr"></div>
-            <input type="file" id="audioInput" accept="audio/*" style="display:none">
+            <input type="file" id="audioInput" accept="audio/*" hidden>
             <button onclick="document.getElementById('audioInput').click()">🎵 Select Audio File</button>
             <div class="audio-player">
                 <audio id="mainAudio" controls></audio>
@@ -46,13 +157,18 @@
                     <button onclick="stopPlayback()">⏹ Stop</button>
                 </div>
             </div>
-            <div class="connected-devices"><strong>Connected Listeners:</strong><ul id="connectedList" class="device-list"></ul></div>
+            <div class="connected-devices">
+                <strong>Connected Listeners:</strong>
+                <ul id="connectedList" class="device-list"></ul>
+            </div>
         </div>
+
+        <!-- Listener Panel -->
         <div class="panel" id="listenerPanel">
             <h2>👥 Listener</h2>
-            <button class="scan-btn" onclick="startQRScanner()">📷 Scan QR</button>
-            <input type="text" id="manualId" placeholder="Or enter Host ID">
-            <button onclick="connectToPeer(manualId.value)">Connect</button>
+            <button onclick="startQRScanner()" class="scan-btn">📷 Scan Host's QR Code</button>
+            <input type="text" id="manualId" placeholder="Or enter Host ID manually">
+            <button onclick="connectToPeer(document.getElementById('manualId').value)">Connect Manually</button>
             <div id="qrScanner"></div>
             <div class="audio-player">
                 <audio id="clientAudio"></audio>
@@ -61,203 +177,358 @@
             </div>
         </div>
     </div>
+
     <script>
-    const CHUNK_SIZE=64*1024, MAX_PARALLEL_CHUNKS=5, SYNC_INTERVAL=5000;
-    let peer, connections=new Map(), receivedFiles=new Map(), isHost=false;
+    const CHUNK_SIZE = 64 * 1024;
+    const MAX_PARALLEL_CHUNKS = 5;
+    const SYNC_INTERVAL = 5000;
+    let receivedFiles = new Map();
+    let connections = new Map();
+    let peer = null;
+    let isHost = false;
 
-    function initializePeer(){ peer=new Peer({debug:2});
-        peer.on('open',id=>{ document.getElementById('myId').textContent=id;
-            new QRCode(document.getElementById('senderQr'),{text:id,width:150,height:150,colorDark:'#00FF00',colorLight:'#FFF'});
+    function initializePeer() {
+        peer = new Peer({ debug: 2 });
+        peer.on('open', id => {
+            document.getElementById('myId').textContent = id;
+            new QRCode(document.getElementById('senderQr'), { 
+                text: id, 
+                width: 150, 
+                height: 150, 
+                colorDark: "#00FF00", 
+                colorLight: "#FFFFFF", 
+                correctLevel: QRCode.CorrectLevel.H 
+            });
+            console.log('Peer ID:', id);
         });
-        peer.on('connection',conn=>{ isHost=true; setupConnection(conn); updateConnectedDevices(); });
-        peer.on('error',err=>updateSyncStatus('🔴 '+err.type));
+        peer.on('connection', conn => {
+            isHost = true;
+            setupConnection(conn);
+            updateConnectedDevices();
+        });
+        peer.on('error', err => updateSyncStatus('🔴 Error: ' + err.type));
     }
-    function setupConnection(conn){
-        connections.set(conn.peer,conn);
-        conn.on('open',()=>updateConnectedDevices());
-        conn.on('data',handleIncomingData);
-        conn.on('close',()=>{ connections.delete(conn.peer); updateConnectedDevices(); });
-    }
-    function copyID(){ navigator.clipboard.writeText(myId.textContent).then(()=>alert('Copied!')); }
 
-    function startQRScanner(){ const qr=document.getElementById('qrScanner'); qr.innerHTML=""; qr.style.display='block';
-        const video=document.createElement('video'),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'); qr.appendChild(video);
-        navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(stream=>{
-            video.srcObject=stream; video.play(); (function scan(){ if(!video.videoWidth)return requestAnimationFrame(scan);
-                canvas.width=video.videoWidth; canvas.height=video.videoHeight; ctx.drawImage(video,0,0,canvas.width,canvas.height);
-                const code=jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data,canvas.width,canvas.height);
-                if(code){ stream.getTracks().forEach(t=>t.stop()); qr.style.display='none'; connectToPeer(code.data); } else requestAnimationFrame(scan);
+    function setupConnection(conn) {
+        connections.set(conn.peer, conn);
+        conn.on('open', () => updateConnectedDevices());
+        conn.on('data', handleIncomingData);
+        conn.on('close', () => { 
+            connections.delete(conn.peer); 
+            updateConnectedDevices(); 
+        });
+    }
+
+    function copyID() { 
+        navigator.clipboard.writeText(document.getElementById('myId').textContent).then(() => alert('ID copied!')); 
+    }
+
+    function startQRScanner() {
+        const qrScanner = document.getElementById('qrScanner'); 
+        qrScanner.innerHTML = ''; 
+        qrScanner.style.display = 'block';
+        const video = document.createElement('video'), 
+                     canvas = document.createElement('canvas'), 
+        ctx = canvas.getContext('2d');
+        qrScanner.appendChild(video);
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(stream => {
+            video.srcObject = stream; 
+            video.play();
+            (function scan() { 
+                if (!video.videoWidth) return requestAnimationFrame(scan);
+                canvas.width = video.videoWidth; 
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const code = jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+                if (code) { 
+                    stream.getTracks().forEach(t => t.stop()); 
+                    qrScanner.style.display = 'none'; 
+                    connectToPeer(code.data); 
+                } else {
+                    requestAnimationFrame(scan);
+                }
             })();
-        }).catch(()=>{ updateSyncStatus('🔴 Camera Denied'); qr.style.display='none'; });
+        }).catch(() => { 
+            updateSyncStatus('🔴 Camera Denied'); 
+            qrScanner.style.display = 'none'; 
+        });
     }
-    function connectToPeer(id){ if(!id||connections.has(id))return; const conn=peer.connect(id,{reliable:true}); setupConnection(conn); updateSyncStatus('🟡 Connecting'); conn.on('open',()=>{ updateSyncStatus('🟢 Connected'); onBecomeListener(); }); }
-   function onBecomeListener() {
-    hostPanel.style.display = 'none';
-    listenerPanel.style.display = 'none';
-    
-    const canvas = visualizer;
-    const audio = clientAudio;
 
-    window.onresize = () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    };
+    function connectToPeer(peerId) {
+        if (!peerId || connections.has(peerId)) return;
+        const conn = peer.connect(peerId, { reliable: true });
+        setupConnection(conn);
+        updateSyncStatus('🟡 Connecting...');
+        conn.on('open', () => {
+            updateSyncStatus('🟢 Connected');
+            onBecomeListener();
+        });
+    }
 
-    // Jab audio ready ho tab visualizer shuru karo
-    clientAudio.addEventListener('canplay', () => {
+    function onBecomeListener() {
+        document.getElementById('hostPanel').style.display = 'none';
+        document.getElementById('listenerPanel').style.display = 'none';
+        const canvas = document.getElementById('visualizer');
+        const audio = document.getElementById('clientAudio');
+        document.body.appendChild(canvas);
         canvas.style.display = 'block';
         canvas.classList.add('fullscreen');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         document.body.classList.add('fullscreen');
-
-        startVisualizer(audio, canvas); // Visualizer ko safe audio ke saath start karo
-    });
-}
-    async function transferAudioFile(file){ const id=Date.now()+'-'+Math.random().toString(36).slice(2), total=Math.ceil(file.size/CHUNK_SIZE);
-        connections.forEach(c=>c.send({type:'audio-metadata',id,name:file.name,size:file.size,mime:file.type,totalChunks:total}));
-        let indices=[...Array(total).keys()]; while(indices.length){ const batch=indices.splice(0,MAX_PARALLEL_CHUNKS); await Promise.all(batch.map(i=>sendChunk(file,i,id))); }
+        startVisualizer(audio, canvas);
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
     }
-    function sendChunk(file,i,id){ return new Promise(res=>{ const reader=new FileReader(),start=i*CHUNK_SIZE,end=Math.min(start+CHUNK_SIZE,file.size);
-            reader.onload=()=>{ connections.forEach(c=>c.send({type:'audio-chunk',id,index:i,data:reader.result})); res(); };
-            reader.readAsArrayBuffer(file.slice(start,end)); }); }
-    function syncPlayback(){ if(!connections.size)return; mainAudio.play(); clearInterval(window._sync);
-        window._sync=setInterval(()=>{ const d={type:'sync',timestamp:Date.now(),currentTime:mainAudio.currentTime,playbackRate:mainAudio.playbackRate}; connections.forEach(c=>c.send(d)); },SYNC_INTERVAL);
+
+    async function transferAudioFile(file) {
+        const fileId = Date.now() + '-' + Math.random().toString(36).slice(2);
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        connections.forEach(c => c.send({ 
+            type: 'audio-metadata', 
+            id: fileId, 
+            name: file.name, 
+            size: file.size, 
+            mime: file.type, 
+            totalChunks 
+        }));
+        const indices = Array.from({ length: totalChunks }, (_, i) => i);
+        while (indices.length) {
+            const batch = indices.splice(0, MAX_PARALLEL_CHUNKS);
+            await Promise.all(batch.map(i => sendChunk(file, i, fileId)));
+        }
     }
-    function pausePlayback(){ mainAudio.pause(); clearInterval(window._sync); connections.forEach(c=>c.send({type:'pause',timestamp:Date.now()})); }
-    function stopPlayback(){ mainAudio.pause(); mainAudio.currentTime=0; clearInterval(window._sync); connections.forEach(c=>c.send({type:'stop',timestamp:Date.now()})); }
-    function handleIncomingData(d){ if(d.type==='audio-metadata')initFile(d); else if(d.type==='audio-chunk')appendChunk(d);
-        else if(d.type==='sync')applySync(d); else if(d.type==='pause')pauseClient(); else if(d.type==='stop')stopClient(); }
-    function initFile(m){ receivedFiles.set(m.id,{chunks:new Array(m.totalChunks),size:m.size,mime:m.mime,received:0}); }
-    function appendChunk(c){ const f=receivedFiles.get(c.id); if(!f)return; f.chunks[c.index]=c.data; f.received+=c.data.byteLength;
-        if(f.received>=f.size){ const blob=new Blob(f.chunks,{type:f.mime}); clientAudio.src=URL.createObjectURL(blob); updateSyncStatus('🟢 Ready'); }}
-    function applySync(d){ const a=clientAudio, latency=(Date.now()-d.timestamp)/1000, target=d.currentTime+latency;
-        if(Math.abs(a.currentTime-target)>0.1) a.currentTime=target; a.playbackRate=d.playbackRate; if(a.paused) a.play(); updateSyncStatus('🟢 Synced'); }
-    function pauseClient(){ clientAudio.pause(); updateSyncStatus('⏸ Paused'); }
-    function stopClient(){ clientAudio.pause(); clientAudio.currentTime=0; updateSyncStatus('⏹ Stopped'); }
-    function updateSyncStatus(txt){ syncStatus.textContent=txt; }
-    function updateConnectedDevices(){ const ul=connectedList; ul.innerHTML=''; connections.forEach((_,id)=>{ const li=document.createElement('li'); li.textContent='Listener:'+id.slice(0,8)+'...'; ul.appendChild(li); }); }
 
-    // Futuristic Siri-style Visualiser
-   
+    function sendChunk(file, index, fileId) {
+        return new Promise(res => {
+            const reader = new FileReader();
+            const start = index * CHUNK_SIZE, 
+                  end = Math.min(start + CHUNK_SIZE, file.size);
+            reader.onload = () => { 
+                connections.forEach(c => c.send({ 
+                    type: 'audio-chunk', 
+                    id: fileId, 
+                    index, 
+                    data: reader.result 
+                })); 
+                res(); 
+            };
+            reader.readAsArrayBuffer(file.slice(start, end));
+        });
+    }
 
-function startVisualizer(audioElement, canvas) {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = ctx.createMediaElementSource(audioElement);
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
-    src.connect(analyser);
-    analyser.connect(ctx.destination);
-    
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    const cctx = canvas.getContext('2d');
-    
-    // Portal configuration
-    const particles = [];
-    const numParticles = 300;
-    const rings = 5;
-    const baseHue = 240; // Blue base color
+    function syncPlayback() {
+        if (!connections.size) return;
+        const mainAudio = document.getElementById('mainAudio'); 
+        mainAudio.play();
+        clearInterval(window._syncInterval);
+        window._syncInterval = setInterval(() => {
+            const data = { 
+                type: 'sync', 
+                timestamp: Date.now(), 
+                currentTime: mainAudio.currentTime, 
+                playbackRate: mainAudio.playbackRate 
+            };
+            connections.forEach(c => c.send(data));
+        }, SYNC_INTERVAL);
+    }
 
-    class Particle {
-        constructor() {
-            this.reset();
-            this.z = Math.random() * rings;
-        }
+    function pausePlayback() { 
+        document.getElementById('mainAudio').pause(); 
+        clearInterval(window._syncInterval); 
+        connections.forEach(c => c.send({ type: 'pause', timestamp: Date.now() })); 
+    }
 
-        reset() {
-            this.angle = Math.random() * Math.PI * 2;
-            this.radius = Math.random() * 30 + 10;
-            this.speed = (Math.random() * 0.5 + 0.1) * (Math.random() < 0.5 ? 1 : -1);
-            this.size = Math.random() * 2 + 1;
-            this.hueOffset = Math.random() * 60 - 30;
-        }
+    function stopPlayback() { 
+        const a = document.getElementById('mainAudio'); 
+        a.pause(); 
+        a.currentTime = 0; 
+        clearInterval(window._syncInterval); 
+        connections.forEach(c => c.send({ type: 'stop', timestamp: Date.now() })); 
+    }
 
-        update(frequency) {
-            this.angle += this.speed * (0.5 + frequency / 255);
-            this.radius += Math.sin(Date.now() * 0.001 + this.z) * 0.1;
-            
-            if (this.radius < 5 || this.radius > 150) {
+    function handleIncomingData(d) { 
+        switch (d.type) { 
+            case 'audio-metadata': return initFile(d); 
+            case 'audio-chunk': return appendChunk(d); 
+            case 'sync': return applySync(d); 
+            case 'pause': return pauseClient(); 
+            case 'stop': return stopClient(); 
+        } 
+    }
+
+    function initFile(m) { 
+        receivedFiles.set(m.id, { 
+            chunks: new Array(m.totalChunks), 
+            size: m.size, 
+            mime: m.mime, 
+            received: 0 
+        }); 
+    }
+
+    function appendChunk(c) { 
+        const f = receivedFiles.get(c.id); 
+        if (!f) return; 
+        f.chunks[c.index] = c.data; 
+        f.received += c.data.byteLength; 
+        if (f.received >= f.size) { 
+            const blob = new Blob(f.chunks, { type: f.mime }); 
+            const audio = document.getElementById('clientAudio'); 
+            audio.src = URL.createObjectURL(blob); 
+            updateSyncStatus('🟢 Ready'); 
+        } 
+    }
+
+    function applySync(d) { 
+        const audio = document.getElementById('clientAudio'); 
+        const latency = (Date.now() - d.timestamp) / 1000; 
+        const target = d.currentTime + latency; 
+        if (Math.abs(audio.currentTime - target) > 0.05) audio.currentTime = target; 
+        audio.playbackRate = d.playbackRate; 
+        if (audio.paused) audio.play(); 
+        updateSyncStatus('🟢 Synchronized'); 
+    }
+
+    function pauseClient() { 
+        document.getElementById('clientAudio').pause(); 
+        updateSyncStatus('⏸ Paused'); 
+    }
+
+    function stopClient() { 
+        const a = document.getElementById('clientAudio'); 
+        a.pause(); 
+        a.currentTime = 0; 
+        updateSyncStatus('⏹ Stopped'); 
+    }
+
+    function updateSyncStatus(text) { 
+        document.getElementById('syncStatus').textContent = text; 
+    }
+
+    function updateConnectedDevices() { 
+        const ul = document.getElementById('connectedList'); 
+        ul.innerHTML = ''; 
+        connections.forEach((_, id) => { 
+            const li = document.createElement('li'); 
+            li.textContent = 'Listener: ' + id.slice(0, 8) + '...'; 
+            ul.appendChild(li); 
+        }); 
+    }
+
+    // Visualizer with Portal Effect (Your Provided Function with Minor Tweaks)
+    function startVisualizer(audioElement, canvas) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = ctx.createMediaElementSource(audioElement);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser);
+        analyser.connect(ctx.destination);
+        
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        const cctx = canvas.getContext('2d');
+        
+        // Portal configuration
+        const particles = [];
+        const numParticles = 300;
+        const rings = 5;
+        const baseHue = 240; // Blue base color
+
+        class Particle {
+            constructor() {
                 this.reset();
+                this.z = Math.random() * rings;
+            }
+
+            reset() {
+                this.angle = Math.random() * Math.PI * 2;
+                this.radius = Math.random() * 30 + 10;
+                this.speed = (Math.random() * 0.5 + 0.1) * (Math.random() < 0.5 ? 1 : -1);
+                this.size = Math.random() * 2 + 1;
+                this.hueOffset = Math.random() * 60 - 30;
+            }
+
+            update(frequency) {
+                this.angle += this.speed * (0.5 + frequency / 255);
+                this.radius += Math.sin(Date.now() * 0.001 + this.z) * 0.1;
+                
+                if (this.radius < 5 || this.radius > 150) {
+                    this.reset();
+                }
             }
         }
-    }
 
-    // Create particles
-    for (let i = 0; i < numParticles; i++) {
-        particles.push(new Particle());
-    }
-
-    function draw() {
-        requestAnimationFrame(draw);
-        analyser.getByteFrequencyData(dataArray);
-        
-        cctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
-        cctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        const average = dataArray.reduce((a, b) => a + b) / bufferLength;
-        const scale = 1 + average / 200;
-
-        // Draw multiple rotating rings
-        for (let r = 0; r < rings; r++) {
-            cctx.save();
-            cctx.translate(centerX, centerY);
-            cctx.rotate(Date.now() * 0.0002 * (r % 2 ? 1 : -1));
-            
-            particles.forEach((p, i) => {
-                if (Math.floor(p.z) !== r) return;
-                
-                const freq = dataArray[i % bufferLength];
-                p.update(freq);
-                
-                const x = Math.cos(p.angle) * (p.radius * scale + r * 30);
-                const y = Math.sin(p.angle) * (p.radius * scale + r * 30);
-                
-                // Create spark effect
-                const gradient = cctx.createRadialGradient(x, y, 0, x, y, p.size * 2);
-                gradient.addColorStop(0, `hsla(${baseHue + p.hueOffset}, 100%, 60%, 1)`);
-                gradient.addColorStop(1, `hsla(${baseHue + p.hueOffset + 30}, 100%, 50%, 0)`);
-                
-                cctx.beginPath();
-                cctx.arc(x, y, p.size * (1 + freq/255), 0, Math.PI * 2);
-                cctx.fillStyle = gradient;
-                
-                // Add trail effect
-                cctx.shadowColor = `hsla(${baseHue + p.hueOffset}, 100%, 50%, 0.5)`;
-                cctx.shadowBlur = 20;
-                cctx.fill();
-            });
-            
-            cctx.restore();
+        // Create particles
+        for (let i = 0; i < numParticles; i++) {
+            particles.push(new Particle());
         }
 
-        // Draw central spark
-        cctx.save();
-        cctx.translate(centerX, centerY);
-        const centralGradient = cctx.createRadialGradient(0, 0, 0, 0, 0, 50);
-        centralGradient.addColorStop(0, `hsla(${baseHue}, 100%, 80%, 1)`);
-        centralGradient.addColorStop(1, `hsla(${baseHue + 60}, 100%, 50%, 0)`);
-        
-        cctx.beginPath();
-        cctx.arc(0, 0, average/5, 0, Math.PI * 2);
-        cctx.fillStyle = centralGradient;
-        cctx.shadowBlur = 50;
-        cctx.shadowColor = `hsla(${baseHue}, 100%, 50%, 0.5)`;
-        cctx.fill();
-        cctx.restore();
+        function draw() {
+            requestAnimationFrame(draw);
+            analyser.getByteFrequencyData(dataArray);
+            
+            cctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            cctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+            const scale = 1 + average / 200;
+
+            // Draw multiple rotating rings
+            for (let r = 0; r < rings; r++) {
+                cctx.save();
+                cctx.translate(centerX, centerY);
+                cctx.rotate(Date.now() * 0.0002 * (r % 2 ? 1 : -1));
+                
+                particles.forEach((p, i) => {
+                    if (Math.floor(p.z) !== r) return;
+                    
+                    const freq = dataArray[i % bufferLength];
+                    p.update(freq);
+                    
+                    const x = Math.cos(p.angle) * (p.radius * scale + r * 30);
+                    const y = Math.sin(p.angle) * (p.radius * scale + r * 30);
+                    
+                    // Create spark effect
+                    const gradient = cctx.createRadialGradient(x, y, 0, x, y, p.size * 2);
+                    gradient.addColorStop(0, `hsla(${baseHue + p.hueOffset}, 100%, 60%, 1)`);
+                    gradient.addColorStop(1, `hsla(${baseHue + p.hueOffset + 30}, 100%, 50%, 0)`);
+                    
+                    cctx.beginPath();
+                    cctx.arc(x, y, p.size * (1 + freq/255), 0, Math.PI * 2);
+                    cctx.fillStyle = gradient;
+                    
+                    // Add trail effect
+                    cctx.shadowColor = `hsla(${baseHue + p.hueOffset}, 100%, 50%, 0.5)`;
+                    cctx.shadowBlur = 20;
+                    cctx.fill();
+                });
+                
+                cctx.restore();
+            }
+
+            // Draw central spark
+            cctx.save();
+            cctx.translate(centerX, centerY);
+            const centralGradient = cctx.createRadialGradient(0, 0, 0, 0, 0, 50);
+            centralGradient.addColorStop(0, `hsla(${baseHue}, 100%, 80%, 1)`);
+            centralGradient.addColorStop(1, `hsla(${baseHue + 60}, 100%, 50%, 0)`);
+            
+            cctx.beginPath();
+            cctx.arc(0, 0, average/5, 0, Math.PI * 2);
+            cctx.fillStyle = centralGradient;
+            cctx.shadowBlur = 50;
+            cctx.shadowColor = `hsla(${baseHue}, 100%, 50%, 0.5)`;
+            cctx.fill();
+            cctx.restore();
+        }
+        draw();
     }
 
-    // Handle window resize
-    window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    });
-
-    draw();
-}
-// Initialization
+    // Initialization
     window.addEventListener('load', initializePeer);
     document.getElementById('audioInput').addEventListener('change', e => { 
         const file = e.target.files[0]; 
