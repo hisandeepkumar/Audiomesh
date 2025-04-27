@@ -1,220 +1,478 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🎵 P2P Audio Sync + Fullscreen Visualiser</title>
-  <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-      background-color: #001f3f;
-      color: white;
-      text-align: center;
-      overflow: hidden;
-    }
-    .container {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 20px;
-      margin: 20px;
-    }
-    .panel {
-      background: #003366;
-      padding: 20px;
-      border-radius: 15px;
-      width: 350px;
-      box-shadow: 0 0 10px rgba(0,255,255,0.5);
-    }
-    .id-box { background: #004080; padding: 10px; border-radius: 10px; margin-bottom: 15px; font-size: 18px; }
-    .copy-btn, button, .scan-btn { border: none; padding: 10px 15px; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; }
-    .copy-btn { background: #ffcc00; } .copy-btn:hover { background: #ffaa00; }
-    .scan-btn { background: #ff6600; color: white; } .scan-btn:hover { background: #cc5500; }
-    .audio-player { background: #002850; border-radius: 15px; padding: 20px; box-shadow: 0 0 10px rgba(0,255,255,0.3); }
-    .audio-controls { display: flex; gap: 15px; justify-content: center; margin-top: 15px; }
-    .audio-controls button { background: #00cc99; } .audio-controls button:hover { background: #009977; }
-    .connected-devices { margin-top: 15px; background: #004080; padding: 10px; border-radius: 10px; }
-    .device-list { list-style: none; padding: 0; }
-    #qrScanner { margin: 10px auto; display: none; }
-    #visualizer {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      display: none;
-      background: black;
-      z-index: 999;
-    }
-    @media (max-width: 768px) { .container { flex-direction: column; } .panel { width: 90%; } }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="./manifest.json">
+    <title>🎵 P2P Audio Sync + Visualiser</title>
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background-color: #001f3f; 
+            color: white; 
+            text-align: center; 
+            margin: 0; 
+            padding: 20px; 
+        }
+        .container { 
+            display: flex; 
+            flex-wrap: wrap; 
+            justify-content: center; 
+            gap: 20px; 
+            margin-top: 20px; 
+        }
+        .panel { 
+            background: #003366; 
+            padding: 20px; 
+            border-radius: 15px; 
+            width: 350px; 
+            box-shadow: 0px 0px 10px rgba(0,255,255,0.5); 
+            text-align: center; 
+        }
+        .id-box { 
+            background: #004080; 
+            padding: 10px; 
+            border-radius: 10px; 
+            margin-bottom: 15px; 
+            font-size: 18px; 
+        }
+        .copy-btn, .scan-btn, button { 
+            border: none; 
+            padding: 10px 15px; 
+            cursor: pointer; 
+            border-radius: 5px; 
+            font-size: 16px; 
+            font-weight: bold; 
+        }
+        .copy-btn { 
+            background: #ffcc00; 
+        } 
+        .copy-btn:hover { 
+            background: #ffaa00; 
+        }
+        .scan-btn { 
+            background: #ff6600; 
+            color: white; 
+            margin: 5px 0; 
+        } 
+        .scan-btn:hover { 
+            background: #cc5500; 
+        }
+        .qr-container { 
+            margin: 10px 0; 
+            display: flex; 
+            justify-content: center; 
+            padding: 10px; 
+            background: white; 
+            border-radius: 10px; 
+        }
+        .audio-player { 
+            background: #002850; 
+            border-radius: 15px; 
+            padding: 20px; 
+            margin: 20px 0; 
+            box-shadow: 0px 0px 10px rgba(0,255,255,0.3); 
+        }
+        .audio-controls { 
+            display: flex; 
+            gap: 15px; 
+            align-items: center; 
+            justify-content: center; 
+            margin-top: 15px; 
+        }
+        .audio-controls button { 
+            background: #00cc99; 
+        } 
+        .audio-controls button:hover { 
+            background: #009977; 
+        }
+        #syncStatus { 
+            margin-top: 10px; 
+            font-weight: bold; 
+            font-size: 18px; 
+            color: #00ff00; 
+        }
+        .connected-devices { 
+            margin-top: 15px; 
+            padding: 10px; 
+            background: #004080; 
+            border-radius: 10px; 
+        }
+        .device-list { 
+            list-style: none; 
+            padding: 0; 
+        }
+        #visualizer { 
+            width: 100%; 
+            height: 200px; 
+            border-radius: 10px; 
+            background: #000; 
+            display: none; 
+        }
+        /* Full-screen styles for visualizer */
+        #visualizer.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1000;
+        }
+        /* Full-screen body styles */
+        body.fullscreen {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        @media (max-width: 768px) { 
+            .container { 
+                flex-direction: column; 
+                align-items: center; 
+            } 
+            .panel { 
+                width: 90%; 
+            } 
+        }
+    </style>
 </head>
 <body>
-  <h1>🎵 P2P Audio Sync</h1>
-  <div class="container">
-    <!-- Host Panel -->
-    <div class="panel" id="hostPanel">
-      <h2>🎧 Host Controls</h2>
-      <div class="id-box">
-        🔑 Your ID: <strong id="myId">Generating...</strong>
-        <button class="copy-btn" onclick="copyID()">Copy</button>
-      </div>
-      <div class="qr-container" id="senderQr"></div>
-      <input type="file" id="audioInput" accept="audio/*" hidden>
-      <button onclick="document.getElementById('audioInput').click()">Select Audio File</button>
-      <div class="audio-player">
-        <audio id="mainAudio" controls></audio>
-        <div class="audio-controls">
-          <button onclick="syncPlayback()">▶ Play</button>
-          <button onclick="pausePlayback()">⏸ Pause</button>
-          <button onclick="stopPlayback()">⏹ Stop</button>
+    <h1>🎵 P2P Audio Sync + Visualiser</h1>
+    <div class="container">
+        <!-- Host Panel -->
+        <div class="panel" id="hostPanel">
+            <h2>🎧 Host Controls</h2>
+            <div class="id-box">
+                🔑 Your ID: <strong id="myId">Generating ID...</strong>
+                <button class="copy-btn" onclick="copyID()">Copy</button>
+            </div>
+            <div class="qr-container" id="senderQr"></div>
+            <input type="file" id="audioInput" accept="audio/*" hidden>
+            <button onclick="document.getElementById('audioInput').click()">🎵 Select Audio File</button>
+            <div class="audio-player">
+                <audio id="mainAudio" controls></audio>
+                <div class="audio-controls">
+                    <button onclick="syncPlayback()" id="playBtn">▶ Play</button>
+                    <button onclick="pausePlayback()">⏸ Pause</button>
+                    <button onclick="stopPlayback()">⏹ Stop</button>
+                </div>
+            </div>
+            <div class="connected-devices">
+                <strong>Connected Listeners:</strong>
+                <ul id="connectedList" class="device-list"></ul>
+            </div>
         </div>
-      </div>
-      <div class="connected-devices">
-        <strong>Listeners:</strong>
-        <ul id="connectedList" class="device-list"></ul>
-      </div>
+
+        <!-- Listener Panel -->
+        <div class="panel" id="listenerPanel">
+            <h2>👥 Listener</h2>
+            <button onclick="startQRScanner()" class="scan-btn">📷 Scan Host's QR Code</button>
+            <input type="text" id="manualId" placeholder="Or enter Host ID manually">
+            <button onclick="connectToPeer(document.getElementById('manualId').value)">Connect Manually</button>
+            <div id="qrScanner"></div>
+            <div class="audio-player">
+                <!-- Hidden audio, visualiser canvas -->
+                <audio id="clientAudio"></audio>
+                <canvas id="visualizer"></canvas>
+                <div id="syncStatus">🔴 Not Connected</div>
+            </div>
+        </div>
     </div>
 
-    <!-- Listener Panel -->
-    <div class="panel" id="listenerPanel">
-      <h2>👥 Listener</h2>
-      <button class="scan-btn" onclick="startQRScanner()">Scan Host QR</button>
-      <input type="text" id="manualId" placeholder="Or enter Host ID">
-      <button onclick="connectToPeer(manualId.value)">Connect</button>
-      <div id="qrScanner"></div>
-    </div>
-  </div>
-
-  <!-- Fullscreen Visualiser -->
-  <canvas id="visualizer"></canvas>
-  <audio id="clientAudio" hidden></audio>
-
-  <script>
-    const CHUNK_SIZE = 64*1024, MAX_PARALLEL=5, SYNC_INTERVAL=5000;
-    let peer, connections=new Map(), receivedFiles=new Map();
+    <script>
+    const CHUNK_SIZE = 64 * 1024;
+    const MAX_PARALLEL_CHUNKS = 5;
+    const SYNC_INTERVAL = 5000;
+    let receivedFiles = new Map();
+    let connections = new Map();
+    let peer = null;
+    let isHost = false;
 
     function initializePeer() {
-      peer = new Peer({ debug:2 });
-      peer.on('open', id=>{
-        document.getElementById('myId').textContent = id;
-        new QRCode(senderQr, { text:id, width:150, height:150, colorDark:'#00FF00', colorLight:'#FFFFFF' });
-      });
-      peer.on('connection', conn=>setupConnection(conn));
-      peer.on('error', err=>console.error(err));
+        peer = new Peer({ debug: 2 });
+        peer.on('open', id => {
+            document.getElementById('myId').textContent = id;
+            new QRCode(document.getElementById('senderQr'), { 
+                text: id, 
+                width: 150, 
+                height: 150, 
+                colorDark: "#00FF00", 
+                colorLight: "#FFFFFF", 
+                correctLevel: QRCode.CorrectLevel.H 
+            });
+            console.log('Peer ID:', id);
+        });
+        peer.on('connection', conn => {
+            isHost = true; // incoming => host
+            setupConnection(conn);
+            updateConnectedDevices();
+        });
+        peer.on('error', err => updateSyncStatus('🔴 Error: ' + err.type));
     }
 
     function setupConnection(conn) {
-      connections.set(conn.peer, conn);
-      conn.on('open', ()=>{
-        updateConnectedList();
-        onBecomeListener();
-      });
-      conn.on('data', data=>handleData(data));
-      conn.on('close', ()=>{ connections.delete(conn.peer); updateConnectedList(); });
+        connections.set(conn.peer, conn);
+        conn.on('open', () => updateConnectedDevices());
+        conn.on('data', handleIncomingData);
+        conn.on('close', () => { 
+            connections.delete(conn.peer); 
+            updateConnectedDevices(); 
+        });
     }
 
-    function copyID(){ navigator.clipboard.writeText(myId.textContent).then(_=>alert('Copied')); }
+    function copyID() { 
+        navigator.clipboard.writeText(document.getElementById('myId').textContent).then(() => alert('ID copied!')); 
+    }
 
     function startQRScanner() {
-      qrScanner.style.display='block';
-      const video=document.createElement('video'), canvas=document.createElement('canvas'), ctx=canvas.getContext('2d');
-      qrScanner.appendChild(video);
-      navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } }).then(stream=>{
-        video.srcObject=stream; video.play();
-        (function scan(){ if(!video.videoWidth) return requestAnimationFrame(scan);
-          canvas.width=video.videoWidth; canvas.height=video.videoHeight;
-          ctx.drawImage(video,0,0,canvas.width,canvas.height);
-          const code=jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data,canvas.width,canvas.height);
-          if(code){ stream.getTracks().forEach(t=>t.stop()); qrScanner.innerHTML=''; qrScanner.style.display='none'; connectToPeer(code.data); }
-          else requestAnimationFrame(scan);
-        })();
-      }).catch(_=>{ qrScanner.style.display='none'; });
-    }
-
-    function connectToPeer(id) {
-      if(!id||connections.has(id)) return;
-      const conn = peer.connect(id, { reliable:true });
-      setupConnection(conn);
-      updateSyncStatus('Connecting...');
-    }
-
-    function updateConnectedList() {
-      connectedList.innerHTML=''; connections.forEach((_,id)=>{
-        const li = document.createElement('li'); li.textContent = id; connectedList.appendChild(li);
-      });
-    }
-
-    document.getElementById('audioInput').addEventListener('change', e=>{
-      const file=e.target.files[0]; if(!file) return; mainAudio.src=URL.createObjectURL(file);
-      sendFile(file);
-    });
-
-    async function sendFile(file){
-      const id=Date.now()+'-'+Math.random().toString(36).substr(2);
-      const total=Math.ceil(file.size/CHUNK_SIZE);
-      connections.forEach(c=>c.send({ type:'audio-metadata', id, size:file.size, mime:file.type, total }));
-      const indices=[...Array(total).keys()];
-      while(indices.length){
-        const batch=indices.splice(0,MAX_PARALLEL);
-        await Promise.all(batch.map(i=>sendChunk(file,i,id)));
-      }
-    }
-    function sendChunk(file,i,id){ return new Promise(res=>{
-      const reader=new FileReader(), start=i*CHUNK_SIZE,end=Math.min(start+CHUNK_SIZE,file.size);
-      reader.onload=()=>{ connections.forEach(c=>c.send({ type:'audio-chunk', id, index:i, data:reader.result })); res(); };
-      reader.readAsArrayBuffer(file.slice(start,end));
-    }); }
-
-    function handleData(d){
-      if(d.type==='audio-metadata'){ receivedFiles.set(d.id,{chunks:[],meta:d}); return; }
-      if(d.type==='audio-chunk'){ const f=receivedFiles.get(d.id); f.chunks[d.index]=d.data; if(f.chunks.length===f.meta.total){
-        const blob=new Blob(f.chunks,{type:f.meta.mime}); clientAudio.src=URL.createObjectURL(blob); clientAudio.play();
-      }}
-      if(d.type==='sync'){ const audio=clientAudio; const latency=(Date.now()-d.timestamp)/1000;
-        const target=d.currentTime+latency; if(Math.abs(audio.currentTime-target)>0.05) audio.currentTime=target;
-        audio.playbackRate=d.playbackRate; audio.paused&&audio.play(); }
-      if(d.type==='pause'){ clientAudio.pause(); }
-      if(d.type==='stop'){ clientAudio.pause(); clientAudio.currentTime=0; }
-    }
-
-    function syncPlayback(){ mainAudio.play(); clearInterval(window._sync);
-      window._sync=setInterval(()=>connections.forEach(c=>c.send({
-        type:'sync', timestamp:Date.now(), currentTime:mainAudio.currentTime, playbackRate:mainAudio.playbackRate
-      })), SYNC_INTERVAL);
-    }
-    function pausePlayback(){ mainAudio.pause(); clearInterval(window._sync); connections.forEach(c=>c.send({type:'pause'})); }
-    function stopPlayback(){ mainAudio.pause(); mainAudio.currentTime=0; clearInterval(window._sync); connections.forEach(c=>c.send({type:'stop'})); }
-
-    function onBecomeListener(){ hostPanel.style.display='none'; listenerPanel.style.display='none';
-      const canvas = visualizer;
-      canvas.style.display='block'; canvas.width=window.innerWidth; canvas.height=window.innerHeight;
-      startVisualizer(clientAudio, canvas);
-    }
-
-    function startVisualizer(audio, canvas){
-      const ctx=new (window.AudioContext||window.webkitAudioContext)();
-      const src=ctx.createMediaElementSource(audio); const analyser=ctx.createAnalyser(); analyser.fftSize=512;
-      src.connect(analyser); analyser.connect(ctx.destination);
-      const dataArr=new Uint8Array(analyser.frequencyBinCount);
-      const cctx=canvas.getContext('2d');
-      function draw(){ requestAnimationFrame(draw); analyser.getByteFrequencyData(dataArr);
-        cctx.fillStyle='black'; cctx.fillRect(0,0,canvas.width,canvas.height);
-        const barWidth=canvas.width/dataArr.length;
-        dataArr.forEach((v,i)=>{ const h=v/255*canvas.height;
-          cctx.fillStyle=`hsl(${(i/dataArr.length)*360+(Date.now()/100)%360},100%,50%)`;
-          cctx.fillRect(i*barWidth,canvas.height-h,barWidth,h);
+        const qrScanner = document.getElementById('qrScanner'); 
+        qrScanner.innerHTML = ''; 
+        qrScanner.style.display = 'block';
+        const video = document.createElement('video'), 
+              canvas = document.createElement('canvas'), 
+              ctx = canvas.getContext('2d');
+        qrScanner.appendChild(video);
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(stream => {
+            video.srcObject = stream; 
+            video.play();
+            (function scan() { 
+                if (!video.videoWidth) return requestAnimationFrame(scan);
+                canvas.width = video.videoWidth; 
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const code = jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+                if (code) { 
+                    stream.getTracks().forEach(t => t.stop()); 
+                    qrScanner.style.display = 'none'; 
+                    connectToPeer(code.data); 
+                } else {
+                    requestAnimationFrame(scan);
+                }
+            })();
+        }).catch(() => { 
+            updateSyncStatus('🔴 Camera Denied'); 
+            qrScanner.style.display = 'none'; 
         });
-      }
-      draw();
     }
 
+    function connectToPeer(peerId) {
+        if (!peerId || connections.has(peerId)) return;
+        const conn = peer.connect(peerId, { reliable: true });
+        setupConnection(conn);
+        updateSyncStatus('🟡 Connecting...');
+        conn.on('open', () => {
+            updateSyncStatus('🟢 Connected');
+            onBecomeListener();
+        });
+    }
+
+    // Listener connect hone par visualizer ko full-screen banayein
+    function onBecomeListener() {
+        // Hide host aur listener panels
+        document.getElementById('hostPanel').style.display = 'none';
+        document.getElementById('listenerPanel').style.display = 'none';
+        
+        const canvas = document.getElementById('visualizer');
+        const audio = document.getElementById('clientAudio');
+        
+        // Canvas ko body ka direct child banayein
+        document.body.appendChild(canvas);
+        canvas.style.display = 'block';
+        canvas.classList.add('fullscreen');
+        
+        // Canvas ke dimensions set karein
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Body ko full-screen mode mein set karein
+        document.body.classList.add('fullscreen');
+        
+        // Visualizer start karein
+        startVisualizer(audio, canvas);
+        
+        // Window resize hone par canvas dimensions adjust karein
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    }
+
+    async function transferAudioFile(file) {
+        const fileId = Date.now() + '-' + Math.random().toString(36).slice(2);
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        connections.forEach(c => c.send({ 
+            type: 'audio-metadata', 
+            id: fileId, 
+            name: file.name, 
+            size: file.size, 
+            mime: file.type, 
+            totalChunks 
+        }));
+        const indices = Array.from({ length: totalChunks }, (_, i) => i);
+        while (indices.length) {
+            const batch = indices.splice(0, MAX_PARALLEL_CHUNKS);
+            await Promise.all(batch.map(i => sendChunk(file, i, fileId)));
+        }
+    }
+
+    function sendChunk(file, index, fileId) {
+        return new Promise(res => {
+            const reader = new FileReader();
+            const start = index * CHUNK_SIZE, 
+                  end = Math.min(start + CHUNK_SIZE, file.size);
+            reader.onload = () => { 
+                connections.forEach(c => c.send({ 
+                    type: 'audio-chunk', 
+                    id: fileId, 
+                    index, 
+                    data: reader.result 
+                })); 
+                res(); 
+            };
+            reader.readAsArrayBuffer(file.slice(start, end));
+        });
+    }
+
+    function syncPlayback() {
+        if (!connections.size) return;
+        const mainAudio = document.getElementById('mainAudio'); 
+        mainAudio.play();
+        clearInterval(window._syncInterval);
+        window._syncInterval = setInterval(() => {
+            const data = { 
+                type: 'sync', 
+                timestamp: Date.now(), 
+                currentTime: mainAudio.currentTime, 
+                playbackRate: mainAudio.playbackRate 
+            };
+            connections.forEach(c => c.send(data));
+        }, SYNC_INTERVAL);
+    }
+
+    function pausePlayback() { 
+        document.getElementById('mainAudio').pause(); 
+        clearInterval(window._syncInterval); 
+        connections.forEach(c => c.send({ type: 'pause', timestamp: Date.now() })); 
+    }
+
+    function stopPlayback() { 
+        const a = document.getElementById('mainAudio'); 
+        a.pause(); 
+        a.currentTime = 0; 
+        clearInterval(window._syncInterval); 
+        connections.forEach(c => c.send({ type: 'stop', timestamp: Date.now() })); 
+    }
+
+    function handleIncomingData(d) { 
+        switch (d.type) { 
+            case 'audio-metadata': return initFile(d); 
+            case 'audio-chunk': return appendChunk(d); 
+            case 'sync': return applySync(d); 
+            case 'pause': return pauseClient(); 
+            case 'stop': return stopClient(); 
+        } 
+    }
+
+    function initFile(m) { 
+        receivedFiles.set(m.id, { 
+            chunks: new Array(m.totalChunks), 
+            size: m.size, 
+            mime: m.mime, 
+            received: 0 
+        }); 
+    }
+
+    function appendChunk(c) { 
+        const f = receivedFiles.get(c.id); 
+        if (!f) return; 
+        f.chunks[c.index] = c.data; 
+        f.received += c.data.byteLength; 
+        if (f.received >= f.size) { 
+            const blob = new Blob(f.chunks, { type: f.mime }); 
+            const audio = document.getElementById('clientAudio'); 
+            audio.src = URL.createObjectURL(blob); 
+            updateSyncStatus('🟢 Ready'); 
+        } 
+    }
+
+    function applySync(d) { 
+        const audio = document.getElementById('clientAudio'); 
+        const latency = (Date.now() - d.timestamp) / 1000; 
+        const target = d.currentTime + latency; 
+        if (Math.abs(audio.currentTime - target) > 0.05) audio.currentTime = target; 
+        audio.playbackRate = d.playbackRate; 
+        if (audio.paused) audio.play(); 
+        updateSyncStatus('🟢 Synchronized'); 
+    }
+
+    function pauseClient() { 
+        document.getElementById('clientAudio').pause(); 
+        updateSyncStatus('⏸ Paused'); 
+    }
+
+    function stopClient() { 
+        const a = document.getElementById('clientAudio'); 
+        a.pause(); 
+        a.currentTime = 0; 
+        updateSyncStatus('⏹ Stopped'); 
+    }
+
+    function updateSyncStatus(text) { 
+        document.getElementById('syncStatus').textContent = text; 
+    }
+
+    function updateConnectedDevices() { 
+        const ul = document.getElementById('connectedList'); 
+        ul.innerHTML = ''; 
+        connections.forEach((_, id) => { 
+            const li = document.createElement('li'); 
+            li.textContent = 'Listener: ' + id.slice(0, 8) + '...'; 
+            ul.appendChild(li); 
+        }); 
+    }
+
+    // Visualizer ko music ke saath color change karne ke liye
+    function startVisualizer(audioElement, canvas) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = ctx.createMediaElementSource(audioElement);
+        const analyser = ctx.createAnalyser(); 
+        analyser.fftSize = 256;
+        src.connect(analyser); 
+        analyser.connect(ctx.destination);
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        const cctx = canvas.getContext('2d');
+        
+        function draw() {
+            requestAnimationFrame(draw);
+            analyser.getByteFrequencyData(dataArray);
+            cctx.clearRect(0, 0, canvas.width, canvas.height);
+            const barWidth = (canvas.width / bufferLength) * 2.5;
+            let x = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                const barHeight = dataArray[i] / 2;
+                // Hue ko frequency ke saath change karein (0-360)
+                const hue = (i / bufferLength) * 360;
+                // Lightness ko amplitude ke saath adjust karein (50%-100%)
+                const lightness = Math.min(50 + (dataArray[i] / 255) * 50, 100);
+                cctx.fillStyle = `hsl(${hue}, 100%, ${lightness}%)`;
+                cctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                x += barWidth + 1;
+            }
+        }
+        draw();
+    }
+
+    // Initialization
     window.addEventListener('load', initializePeer);
-  </script>
+    document.getElementById('audioInput').addEventListener('change', e => { 
+        const file = e.target.files[0]; 
+        if (!file.type.startsWith('audio/')) return alert('Select audio!'); 
+        transferAudioFile(file); 
+        document.getElementById('mainAudio').src = URL.createObjectURL(file); 
+    });
+    </script>
 </body>
 </html>
